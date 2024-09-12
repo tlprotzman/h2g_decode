@@ -10,6 +10,7 @@ tlprotzman@gmail.com
 #include "file_stream.h"
 #include "line_builder.h"
 #include "waveform_builder.h"
+#include "event_aligner.h"
 
 #include <vector>
 
@@ -38,11 +39,24 @@ void test_line_builder(int run_number) {
         }
         ret = fs->read_packet(buffer);
     }
+
+    std::list<kcu_event*> *single_kcu_events[NUM_KCU];
+    for (int i = 0; i < NUM_KCU; i++) {
+        single_kcu_events[i] = wbs[i]->get_complete();
+    }
+
+    std::cout << "done building waveforms, aligning..." << std::endl;
+
+    auto aligner = new event_aligner(NUM_KCU);
+    aligner->align(single_kcu_events);
+
+
     delete fs;
     delete lb;
     for (auto wb : wbs) {
         delete wb;
     }
+    delete aligner;
 
 }
 

@@ -83,7 +83,7 @@ waveform_builder::~waveform_builder() {
         }
     }
  
-    std::cout << "WAVEFORM BUILDER: Ended with " << in_order << " in order" << std::endl;
+    // std::cout << "WAVEFORM BUILDER: Ended with " << in_order << " in order" << std::endl;
 
     for (auto e : *complete) {
         delete e;
@@ -106,12 +106,17 @@ bool waveform_builder::build(std::list<sample*> *samples) {
             for (uint32_t i = 0; i < (*event)->found; i++) {
                 // std::cout << "Adding to existing sample" << std::endl;
                 // if ((*event)->timestamp[i] == s->timestamp) {
-                if ((*event)->timestamp[i] - s->timestamp < 2 || s->timestamp - (*event)->timestamp[i] < 2) { // Try allowing for some jitter
+                if ((*event)->timestamp[i] - s->timestamp < 2 || s->timestamp - (*event)->timestamp[i] < 1) { // Try allowing for some jitter
                     auto offset = 72 * s->asic + 36 * s->half;
                     for (int j = 0; j < 36; j++) {
                         (*event)->channels[j + offset][i] = s->channels[j];
                     }
                     found = true;
+                    if (offset == 0) {
+                        (*event)->bunch_counter[i] = s->bunch_counter;
+                        (*event)->event_counter[i] = s->event_counter;
+                        (*event)->orbit_counter[i] = s->orbit_counter;
+                    }
                     (*event)->added++;
                     if ((*event)->is_complete()) {
                         complete->push_back(*event);
@@ -148,9 +153,11 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                     (*event)->channels[j + offset][0] = s->channels[j];
                 }
                 (*event)->timestamp[0] = s->timestamp;
-                (*event)->bunch_counter[0] = s->bunch_counter;
-                (*event)->event_counter[0] = s->event_counter;
-                (*event)->orbit_counter[0] = s->orbit_counter;
+                if (offset == 0) {
+                    (*event)->bunch_counter[0] = s->bunch_counter;
+                    (*event)->event_counter[0] = s->event_counter;
+                    (*event)->orbit_counter[0] = s->orbit_counter;
+                }
                 (*event)->found++;
                 (*event)->added++;
                 found = true;
@@ -168,9 +175,11 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                 }
                 
                 (*event)->timestamp[(*event)->found] = s->timestamp;
-                (*event)->bunch_counter[(*event)->found] = s->bunch_counter;
-                (*event)->event_counter[(*event)->found] = s->event_counter;
-                (*event)->orbit_counter[(*event)->found] = s->orbit_counter;
+                if (offset == 0) {
+                    (*event)->bunch_counter[(*event)->found] = s->bunch_counter;
+                    (*event)->event_counter[(*event)->found] = s->event_counter;
+                    (*event)->orbit_counter[(*event)->found] = s->orbit_counter;
+                }
 
                 (*event)->found++;
                 (*event)->added++;

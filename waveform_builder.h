@@ -29,6 +29,7 @@ public:
     ~kcu_event();
 
     bool is_complete();
+    uint32_t get_timestamp() {return timestamp[0];}
 
     friend class waveform_builder;
 };
@@ -49,4 +50,5 @@ public:
     waveform_builder(uint32_t fpga_id, uint32_t num_samples);
     ~waveform_builder();
     bool build(std::list<sample*> *samples);
+    std::list<kcu_event*>* get_complete() {return complete;}
 };
