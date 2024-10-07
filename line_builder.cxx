@@ -186,7 +186,20 @@ bool line_builder::process_complete() {
                 if ((i == 0 && j == 0) | (i == 0 && j == 1) | (i == 3 && j == 5) | (i == 4 && j == 7)) {
                     continue;
                 }
-                s->channels[ch] = ls->lines[i]->package[j];
+                // Now we have each channel, we can decode the ADC value out of it
+                // [Tc] [Tp][10b ADC][10b TOT] [10b TOA] (case 4 from the data sheet);
+                s->adc[ch] = (ls->lines[i]->package[j] >> 20) & 0x3FF;
+                s->toa[ch] = (ls->lines[i]->package[j] >> 10) & 0x3FF;
+                s->tot[ch] = ls->lines[i]->package[j] & 0x3FF;
+    
+                // TOT Decoder
+                // TOT is a 12 bit counter, but gets sent as a 10 bit number
+                // If the most significant bit is 1, then the lower two bits were dropped
+                if (s->tot[ch] & 0x200) {
+                    s->tot[ch] = s->tot[ch] & 0b0111111111;
+                    s->tot[ch] = s->tot[ch] << 3;
+                }
+
                 ch++;
             }
         }

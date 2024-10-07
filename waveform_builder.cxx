@@ -15,8 +15,10 @@ kcu_event::kcu_event(uint32_t fpga, uint32_t samples) {
     event_counter = new uint32_t[samples];
     orbit_counter = new uint32_t[samples];
     timestamp = new uint32_t[samples];
-    for (int i = 0; i < 72; i++) {
-        channels[i] = new uint32_t[samples];
+    for (int i = 0; i < 144; i++) {
+        adc[i] = new uint32_t[samples];
+        toa[i] = new uint32_t[samples];
+        tot[i] = new uint32_t[samples];
     }
 }
 
@@ -34,21 +36,20 @@ kcu_event::~kcu_event() {
     // }
     // std::cout << "\n\n";
     // }
-    delete bunch_counter;
-    delete event_counter;
-    delete orbit_counter;
-    delete timestamp;
-    for (int i = 0; i < 72; i++) {
-        delete channels[i];
+    delete[] bunch_counter;
+    delete[] event_counter;
+    delete[] orbit_counter;
+    delete[] timestamp;
+    for (int i = 0; i < 144; i++) {
+        delete[] adc[i];
+        delete[] toa[i];
+        delete[] tot[i];
     }
 }
 
 bool kcu_event::is_complete() {
     return added == samples * 4;
 }
-
-
-
 
 waveform_builder::waveform_builder(uint32_t fpga_id, uint32_t num_samples) {
     this->fpga_id = fpga_id;
@@ -82,8 +83,6 @@ waveform_builder::~waveform_builder() {
             in_order++;
         }
     }
- 
-    // std::cout << "WAVEFORM BUILDER: Ended with " << in_order << " in order" << std::endl;
 
     for (auto e : *complete) {
         delete e;
@@ -109,7 +108,9 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                 if ((*event)->timestamp[i] - s->timestamp < 2 || s->timestamp - (*event)->timestamp[i] < 1) { // Try allowing for some jitter
                     auto offset = 72 * s->asic + 36 * s->half;
                     for (int j = 0; j < 36; j++) {
-                        (*event)->channels[j + offset][i] = s->channels[j];
+                        (*event)->adc[j + offset][i] = s->adc[j];
+                        (*event)->toa[j + offset][i] = s->toa[j];
+                        (*event)->tot[j + offset][i] = s->tot[j];
                     }
                     found = true;
                     if (offset == 0) {
@@ -137,10 +138,16 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                 // First, shift all existing samples later in the series
                 int shift_by = ((*event)->timestamp[0] - s->timestamp) / 41;
                 // std::cout << "shifting by " << shift_by << std::endl;
+                if (shift_by > num_samples) {
+                    // std::cout << "ERROR: shift by " << shift_by << " is greater than num_samples " << num_samples << std::endl;
+                    break;
+                }
                 for (int i = 0; i < shift_by; i++) {
                     for (int j = num_samples - 1; j > 0; j--) {
                         for (int k = 0; k < 72; k++) {
-                            (*event)->channels[k][j] = (*event)->channels[k][j - 1];
+                            (*event)->adc[k + offset][j] = (*event)->adc[k + offset][j - 1];
+                            (*event)->toa[k + offset][j] = (*event)->toa[k + offset][j - 1];
+                            (*event)->tot[k + offset][j] = (*event)->tot[k + offset][j - 1];
                         }
                         (*event)->timestamp[j] = (*event)->timestamp[j - 1];
                         (*event)->bunch_counter[j] = (*event)->bunch_counter[j - 1];
@@ -150,7 +157,9 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                 }
                 // Now we add the new sample at the beginning
                 for (int j = 0; j < 36; j++) {
-                    (*event)->channels[j + offset][0] = s->channels[j];
+                    (*event)->adc[j + offset][0] = s->adc[j];
+                    (*event)->toa[j + offset][0] = s->toa[j];
+                    (*event)->tot[j + offset][0] = s->tot[j];
                 }
                 (*event)->timestamp[0] = s->timestamp;
                 if (offset == 0) {
@@ -171,7 +180,9 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                 // std::cout << "Adding to next sample" << std::endl;
                 auto offset = 72 * s->asic + 36 * s->half;
                 for (int j = 0; j < 36; j++) {
-                    (*event)->channels[j + offset][(*event)->found] = s->channels[j];
+                    (*event)->adc[j + offset][(*event)->found] = s->adc[j];
+                    (*event)->toa[j + offset][(*event)->found] = s->toa[j];
+                    (*event)->tot[j + offset][(*event)->found] = s->tot[j];
                 }
                 
                 (*event)->timestamp[(*event)->found] = s->timestamp;
@@ -202,7 +213,9 @@ bool waveform_builder::build(std::list<sample*> *samples) {
             attempted++;
             auto offset = 72 * s->asic + 36 * s->half;
             for (int j = 0; j < 36; j++) {
-                event->channels[j + offset][0] = s->channels[j];
+                event->adc[j + offset][0] = s->adc[j];
+                event->toa[j + offset][0] = s->toa[j];
+                event->tot[j + offset][0] = s->tot[j];
             }
             event->timestamp[0] = s->timestamp;
             event->bunch_counter[0] = s->bunch_counter;
@@ -218,6 +231,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
         }
     }
     while (in_progress->size() > 2000) {
+        std::cout << "list too long" << std::endl;
         auto e = in_progress->front();
         aborted++;
         in_progress->pop_front();
@@ -227,4 +241,17 @@ bool waveform_builder::build(std::list<sample*> *samples) {
     // samples->clear();
     // std::cout << "bailing with " << samples->size() << " samples left" << std::endl;
     return false;
+}
+
+void waveform_builder::unwrap_counters() {
+    uint32_t last_timestamp = 0;
+    uint32_t wrap_counter = 0;
+    for (auto e : *complete) {
+        if (e->timestamp[0] < last_timestamp) {
+            // std::cout << "WRAP AROUND!!" << std::endl;
+            wrap_counter++;
+        }
+        last_timestamp = e->timestamp[0];
+        e->unwrapped_timestamp = e->timestamp[0] + (1<<30) * wrap_counter;
+    }
 }

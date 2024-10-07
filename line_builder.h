@@ -38,7 +38,9 @@ struct sample {
     uint32_t cm;
     uint32_t calib;
     uint32_t crc;
-    uint32_t channels[36];
+    uint32_t adc[36];
+    uint32_t toa[36];
+    uint32_t tot[36];
 };
 
 

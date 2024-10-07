@@ -12,7 +12,7 @@ class aligned_event {
 private:
     uint32_t num_fpga;
     uint32_t events_found;
-    uint32_t *timestamp;
+    long *timestamp;
     kcu_event **events;
 
 public:

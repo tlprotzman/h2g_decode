@@ -9,16 +9,16 @@
 aligned_event::aligned_event(uint32_t num_fpga) {
     this->num_fpga = num_fpga;
     events_found = 0;
-    timestamp = new uint32_t[num_fpga];
+    timestamp = new long[num_fpga];
     events = new kcu_event*[num_fpga];
 }
 
 aligned_event::~aligned_event() {
-    delete timestamp;
+    delete[] timestamp;
     // for (int i = 0; i < num_fpga; i++) {
     //     delete events[i];
     // }
-    delete events;
+    delete[] events;
 }
 
 bool aligned_event::is_complete() {
@@ -57,7 +57,8 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
     }
 
     while (!done) {
-        std::vector<uint32_t> timestamp_delta;
+        std::cout << "\n\n";
+        std::vector<long> timestamp_delta;
         long avg = 0;
         for (int i = 0; i < num_fpga; i++) {
             auto iter = iters[i];
@@ -84,11 +85,11 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
         // std::cout << std::endl;
 
         // check range of deltas;
-        int max_range = 0;
+        long max_range = 0;
         int farthest_off = 0;
         for (int i = 0; i  < num_fpga; i++) {
             // long delta = std::max(timestamp_delta[i] - avg, avg - timestamp_delta[i]);
-            uint32_t delta = abs(timestamp_delta[i] - avg);
+            long delta = abs(timestamp_delta[i] - avg);
             if (delta > max_range) {
                 max_range = delta;
                 farthest_off = i;
@@ -100,24 +101,34 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
         // std::cout << "\tMax range: " << max_range << std::endl;
 
         // CASE 1: All deltas are within 1
+        std::cout << "Farthest off: " << timestamp_delta[farthest_off] << " Average: " << avg << " Difference: " << timestamp_delta[farthest_off] - avg << std::endl;
         if (abs(max_range) < 4) {
             std::cout << "made new event" << std::endl;
             // Build a new aligned event
             aligned_event *ae = new aligned_event(num_fpga);
             ae->events = new kcu_event*[num_fpga];
+            std::cout << "Event counters: ";
             for (uint32_t i = 0; i < num_fpga; i++) {
+                std::cout << "FPGA " << i << ": " << (*iters[i])->get_event_counter() << "\t";
                 ae->events[i] = *iters[i];
                 ae->timestamp[i] = (*iters[i])->get_timestamp();
                 last_good_timestamp[i] = (*iters[i])->get_timestamp();
                 iters[i]++;
             }
+            std::cout << std::endl;
+            std::cout << "Time stamps: ";
+            for (uint32_t i = 0; i < num_fpga; i++) {
+                std::cout << "FPGA " << i << ": " << ae->timestamp[i] << "\t";
+            }
+            std::cout << std::endl;
             complete->push_back(ae);
         }
 
         // Check if the farthest off is too close or too far
-        else if ((*iters[farthest_off])->get_timestamp() - avg > 0) {
+        // else if ((*iters[farthest_off])->get_timestamp() - avg > 0) {
+        else if (timestamp_delta[farthest_off] - avg > 0) {
             std::cout << "Farthest (" << farthest_off << ") is too far ahead with max range of " << max_range << std::endl;
-            std::cout << "T0: " << last_good_timestamp[0] << " T1: " << last_good_timestamp[1] << " T2: " << last_good_timestamp[2] << " T3: " << last_good_timestamp[3] << std::endl;
+            std::cout << "Avg: " << avg << " T0: " << last_good_timestamp[0] << " T1: " << last_good_timestamp[1] << " T2: " << last_good_timestamp[2] << " T3: " << last_good_timestamp[3] << std::endl;
             std::cout << "Timestamps: "
                         << (*iters[0])->get_timestamp() << " "
                         << (*iters[1])->get_timestamp() << " "
@@ -132,7 +143,7 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
             }
         } else {
             std::cout << "Farthest (" << farthest_off << ") is too far behind with max range of " << max_range << std::endl;
-            std::cout << "T0: " << last_good_timestamp[0] << " T1: " << last_good_timestamp[1] << " T2: " << last_good_timestamp[2] << " T3: " << last_good_timestamp[3] << std::endl;
+            std::cout << "Avg: " << avg << " T0: " << last_good_timestamp[0] << " T1: " << last_good_timestamp[1] << " T2: " << last_good_timestamp[2] << " T3: " << last_good_timestamp[3] << std::endl;
             std::cout << "Timestamps: "
                         << (*iters[0])->get_timestamp() << " "
                         << (*iters[1])->get_timestamp() << " "

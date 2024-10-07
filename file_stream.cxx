@@ -17,6 +17,11 @@ file_stream::file_stream(const char *fname, uint32_t num_fpgas) {
     }
     current_head = file.tellg();
     std::cout << "FILE STREAM: Starting at byte " << current_head << std::endl;
+    file.seekg(0, std::ios::end);
+    end = file.tellg();
+    std::cout << "FILE STREAM: File size is " << end << " bytes" << std::endl;
+    file.seekg(current_head, std::ios::beg);
+    current_percent = (int)current_head * 100 / (int)end;
 }
 
 file_stream::~file_stream() {
@@ -35,6 +40,11 @@ int file_stream::read_packet(uint8_t *buffer) {
     file.seekg(current_head, std::ios::beg);    // Return to current point in file
     file.read(reinterpret_cast<char*>(buffer), packet_size);;
     current_head = file.tellg();
+
+    // if ((int)current_head * 100 / (int)end > current_percent) {
+    //     current_percent = current_head * 100 / end;
+    //     std::cout << "FILE STREAM: " << current_percent << "\% complete" << std::endl;
+    // }
 
     // Check if the read was successful
     if (file.rdstate() & std::ifstream::failbit || file.rdstate() & std::ifstream::badbit) {

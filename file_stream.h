@@ -8,6 +8,8 @@ class file_stream {
 private:
     std::ifstream file;
     std::streampos current_head;
+    std::streampos end;
+    int current_percent;
     
     uint32_t num_fpgas;
 

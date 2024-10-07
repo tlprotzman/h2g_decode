@@ -22,15 +22,23 @@ private:
     uint32_t *orbit_counter;
     uint32_t *timestamp;
 
-    uint32_t *channels[144];
+    // Maybe we can simplifly things by unwrapping the counter
+    long unwrapped_timestamp;
+
+    uint32_t *adc[144];
+    uint32_t *toa[144];
+    uint32_t *tot[144];
 
 public:
     kcu_event(uint32_t fpga, uint32_t samples);
     ~kcu_event();
 
     bool is_complete();
-    uint32_t get_timestamp() {return timestamp[0];}
-
+    // uint32_t get_timestamp() {return timestamp[0];}
+    long get_timestamp() {return unwrapped_timestamp;}
+    uint32_t get_event_counter() {return event_counter[0];}
+    uint32_t get_sample_adc(int channel, int sample) {return adc[channel][sample];}
+    
     friend class waveform_builder;
 };
 
@@ -50,5 +58,6 @@ public:
     waveform_builder(uint32_t fpga_id, uint32_t num_samples);
     ~waveform_builder();
     bool build(std::list<sample*> *samples);
+    void unwrap_counters();
     std::list<kcu_event*>* get_complete() {return complete;}
 };

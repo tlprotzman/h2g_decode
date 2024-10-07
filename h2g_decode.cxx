@@ -12,15 +12,18 @@ tlprotzman@gmail.com
 #include "waveform_builder.h"
 #include "event_aligner.h"
 
+#include <string>
 #include <vector>
 
 void test_line_builder(int run_number) {
+    bool align = true;
+    bool spectra = false;
     const int NUM_KCU = 4;
     const int NUM_SAMPLES = 10;
     char file_name[100];
-    sprintf(file_name, "/Volumes/ProtzmanSSD/data/epic/dump/hadron0830/Run%03d.h2g", run_number);
-    // auto fs = new file_stream("/Volumes/ProtzmanSSD/data/epic/dump/hadron0830/Run220.h2g", NUM_KCU);
-    // auto fs = new file_stream("/Volumes/ProtzmanSSD/data/epic/dump/hadron0830/Run126.h2g", NUM_KCU);
+    // snprintf(file_name, 100, "/Volumes/ProtzmanSSD/data/epic/dump/hadron0830/Run%03d.h2g", run_number);
+    snprintf(file_name, 100, "Run%03d.h2g", 304);
+    // snprintf(file_name, 100, "/Users/tristan/epic/eeemcal/SiPM_tests/ijclab/pedscan_configs/runs/Run%03d.h2g", run_number);
     auto fs = new file_stream(file_name, NUM_KCU);
     auto lb = new line_builder(NUM_KCU);
     std::vector<waveform_builder*> wbs;
@@ -40,15 +43,26 @@ void test_line_builder(int run_number) {
         ret = fs->read_packet(buffer);
     }
 
+    // Unwrap counters;
+    // for (auto wb : wbs) {
+    //     wb->unwrap_counters();
+    // }
+
     std::list<kcu_event*> *single_kcu_events[NUM_KCU];
     for (int i = 0; i < NUM_KCU; i++) {
         single_kcu_events[i] = wbs[i]->get_complete();
+        std::cout << "KCU " << i << " has " << single_kcu_events[i]->size() << " events" << std::endl;
+
     }
 
-    std::cout << "done building waveforms, aligning..." << std::endl;
 
-    auto aligner = new event_aligner(NUM_KCU);
-    aligner->align(single_kcu_events);
+    event_aligner *aligner = nullptr;
+    if (align) {
+        std::cout << "done building waveforms, aligning..." << std::endl;
+
+        aligner = new event_aligner(NUM_KCU);
+        aligner->align(single_kcu_events);
+    }
 
 
     delete fs;
@@ -56,11 +70,17 @@ void test_line_builder(int run_number) {
     for (auto wb : wbs) {
         delete wb;
     }
-    delete aligner;
+    if (align) {
+        delete aligner;
+    }
 
 }
 
 int main(int argc, char **argv) {
+    if (argc != 2) {
+        std::cout << "Usage: h2g_decode <run_number>" << std::endl;
+        return 1;
+    }
     int run_number = std::stoi(argv[1]);
     test_line_builder(run_number);
     return 0;
