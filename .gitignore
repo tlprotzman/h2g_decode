@@ -1,0 +1,4 @@
+*.o
+.vscode
+*.h2g
+h2g_decode
