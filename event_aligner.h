@@ -20,6 +20,7 @@ public:
     ~aligned_event();
 
     bool is_complete();
+    kcu_event *get_event(uint32_t fpga) {return events[fpga];}
 
     friend class event_aligner;
 };
@@ -33,4 +34,5 @@ public:
     event_aligner(uint32_t num_fpga);
     ~event_aligner();
     bool align(std::list<kcu_event*> **single_kcu_events);
+    std::list<aligned_event*> *get_complete() {return complete;}
 };

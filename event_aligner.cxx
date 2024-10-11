@@ -70,6 +70,7 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
                 break;
             }
             timestamp_delta.push_back((*next)->get_timestamp() -  last_good_timestamp[i]);
+            std::cout << (*next)->get_timestamp() << " - " << last_good_timestamp[i] << " = " << timestamp_delta.back() << std::endl;
             avg += timestamp_delta.back();
         }
         avg /= num_fpga;
@@ -102,7 +103,7 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
 
         // CASE 1: All deltas are within 1
         std::cout << "Farthest off: " << timestamp_delta[farthest_off] << " Average: " << avg << " Difference: " << timestamp_delta[farthest_off] - avg << std::endl;
-        if (abs(max_range) < 4) {
+        if (abs(max_range) < 1) {
             std::cout << "made new event" << std::endl;
             // Build a new aligned event
             aligned_event *ae = new aligned_event(num_fpga);
@@ -112,8 +113,8 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
                 std::cout << "FPGA " << i << ": " << (*iters[i])->get_event_counter() << "\t";
                 ae->events[i] = *iters[i];
                 ae->timestamp[i] = (*iters[i])->get_timestamp();
-                last_good_timestamp[i] = (*iters[i])->get_timestamp();
                 iters[i]++;
+                last_good_timestamp[i] = (*iters[i])->get_timestamp();
             }
             std::cout << std::endl;
             std::cout << "Time stamps: ";
@@ -135,6 +136,11 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
                         << (*iters[2])->get_timestamp() << " "
                         << (*iters[3])->get_timestamp() << std::endl;
             std::cout << "Delta: " << timestamp_delta[0] << " " << timestamp_delta[1] << " " << timestamp_delta[2] << " " << timestamp_delta[3] << std::endl << std::endl;
+            std::cout << "Event counters: "
+                        << (*iters[0])->get_event_counter() << " "
+                        << (*iters[1])->get_event_counter() << " "
+                        << (*iters[2])->get_event_counter() << " "
+                        << (*iters[3])->get_event_counter() << std::endl;
             // Move the other three forwards
             for (uint32_t i = 0; i < num_fpga; i++) {
                 if (i != farthest_off) {
@@ -150,6 +156,11 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
                         << (*iters[2])->get_timestamp() << " "
                         << (*iters[3])->get_timestamp() << std::endl;
             std::cout << "Delta: " << timestamp_delta[0] << " " << timestamp_delta[1] << " " << timestamp_delta[2] << " " << timestamp_delta[3] << std::endl << std::endl;
+            std::cout << "Event counters: "
+                        << (*iters[0])->get_event_counter() << " "
+                        << (*iters[1])->get_event_counter() << " "
+                        << (*iters[2])->get_event_counter() << " "
+                        << (*iters[3])->get_event_counter() << std::endl;
             // move this one forward
             iters[farthest_off]++;
         }

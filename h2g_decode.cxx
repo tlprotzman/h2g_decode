@@ -11,6 +11,7 @@ tlprotzman@gmail.com
 #include "line_builder.h"
 #include "waveform_builder.h"
 #include "event_aligner.h"
+#include "tree_writer.h"
 
 #include <string>
 #include <vector>
@@ -21,8 +22,8 @@ void test_line_builder(int run_number) {
     const int NUM_KCU = 4;
     const int NUM_SAMPLES = 10;
     char file_name[100];
-    // snprintf(file_name, 100, "/Volumes/ProtzmanSSD/data/epic/dump/hadron0830/Run%03d.h2g", run_number);
-    snprintf(file_name, 100, "Run%03d.h2g", 304);
+    snprintf(file_name, 100, "/Volumes/ProtzmanSSD/data/epic/dump/hadron0830/Run%03d.h2g", run_number);
+    // snprintf(file_name, 100, "Run%03d.h2g", 304);
     // snprintf(file_name, 100, "/Users/tristan/epic/eeemcal/SiPM_tests/ijclab/pedscan_configs/runs/Run%03d.h2g", run_number);
     auto fs = new file_stream(file_name, NUM_KCU);
     auto lb = new line_builder(NUM_KCU);
@@ -44,9 +45,9 @@ void test_line_builder(int run_number) {
     }
 
     // Unwrap counters;
-    // for (auto wb : wbs) {
-    //     wb->unwrap_counters();
-    // }
+    for (auto wb : wbs) {
+        wb->unwrap_counters();
+    }
 
     std::list<kcu_event*> *single_kcu_events[NUM_KCU];
     for (int i = 0; i < NUM_KCU; i++) {
@@ -62,7 +63,16 @@ void test_line_builder(int run_number) {
 
         aligner = new event_aligner(NUM_KCU);
         aligner->align(single_kcu_events);
+
+        auto complete = aligner->get_complete();
+        std::cout << "Aligned events: " << complete->size() << std::endl;
+        auto writer = new event_writer("test.root");
+        for (auto e : *complete) {
+            writer->write_event(e);
+        }
+        delete writer;
     }
+    
 
 
     delete fs;

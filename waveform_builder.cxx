@@ -51,6 +51,15 @@ bool kcu_event::is_complete() {
     return added == samples * 4;
 }
 
+bool kcu_event::is_ordered() {
+    for (int i = 1; i < found; i++) {
+        if (event_counter[i] != (event_counter[i - 1] + 1) % 64) {
+            return false;
+        }
+    }
+    return true;
+}
+
 waveform_builder::waveform_builder(uint32_t fpga_id, uint32_t num_samples) {
     this->fpga_id = fpga_id;
     this->num_samples = num_samples;
@@ -92,6 +101,7 @@ waveform_builder::~waveform_builder() {
     auto percent_lost = (float)aborted / (float)attempted;
     percent_lost *= 100;
     std::cout << "WAVEFORM BUILDER: Ended with " << aborted << " in progress and " << completed << " complete (" << percent_lost << "\% lost)" << std::endl;
+    std::cout << "In order: " << in_order << std::endl;
 }
 
 bool waveform_builder::build(std::list<sample*> *samples) {
@@ -120,9 +130,14 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                     }
                     (*event)->added++;
                     if ((*event)->is_complete()) {
-                        complete->push_back(*event);
+                        // check if it's in order
+                        if ((*event)->is_ordered()) {
+                            complete->push_back(*event);
+                            completed++;
+                        } else {
+                            aborted++;
+                        }
                         in_progress->erase(std::next(event).base());
-                        completed++;
                     }
                     break;
                 }
@@ -246,7 +261,14 @@ bool waveform_builder::build(std::list<sample*> *samples) {
 void waveform_builder::unwrap_counters() {
     uint32_t last_timestamp = 0;
     uint32_t wrap_counter = 0;
+    uint32_t last_event_number = 0;
+    uint32_t event_wrap_counter = 0;
     for (auto e : *complete) {
+        if (e->event_counter[0] < last_event_number) {
+            event_wrap_counter++;
+        }
+        last_event_number = e->event_counter[0];
+        e->unwrapped_event_number = e->event_counter[0] + (1<<6) * event_wrap_counter;
         if (e->timestamp[0] < last_timestamp) {
             // std::cout << "WRAP AROUND!!" << std::endl;
             wrap_counter++;

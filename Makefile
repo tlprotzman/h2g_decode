@@ -2,7 +2,10 @@
 CXX := g++
 
 # Compiler flags
-CXXFLAGS := -std=c++17 -g  -Werror
+CXXFLAGS := -std=c++17 -g  -Werror $(shell root-config --cflags)
+
+# Linker flags
+LDFLAGS := $(shell root-config --ldflags) $(shell root-config --glibs)
 
 # Source files
 SRCS := $(wildcard *.cxx)
@@ -18,7 +21,7 @@ all: $(TARGET)
 
 # Rule to build the executable
 $(TARGET): $(OBJS)
-	$(CXX) $(CXXFLAGS) $^ -o $@
+	$(CXX) $(CXXFLAGS)$(LDFLAGS) $^ -o $@
 
 # Rule to build object files
 %.o: %.cxx
