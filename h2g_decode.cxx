@@ -23,8 +23,13 @@ void test_line_builder(int run_number) {
     const int NUM_SAMPLES = 10;
     char file_name[100];
     const char* data_path = std::getenv("DATA_PATH");
+    const char* output_path = std::getenv("OUTPUT_PATH");
     if (data_path == nullptr) {
         std::cout << "Environment variable DATA_PATH is not set." << std::endl;
+        return;
+    }
+    if (output_path == nullptr) {
+        std::cout << "Environment variable OUTPUT_PATH is not set." << std::endl;
         return;
     }
     snprintf(file_name, 100, "%s/Run%03d.h2g", data_path, run_number);
@@ -72,7 +77,7 @@ void test_line_builder(int run_number) {
         auto complete = aligner->get_complete();
         std::cout << "Aligned events: " << complete->size() << std::endl;
         char out_file_name[100];
-        snprintf(out_file_name, 100, "/mnt/ssd/data/epic/lfhcal_output/run%03d.root", run_number);
+        snprintf(out_file_name, 100, "%s/run%03d.root", output_path, run_number);
         auto writer = new event_writer(out_file_name);
         for (auto e : *complete) {
             writer->write_event(e);

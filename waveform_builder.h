@@ -40,8 +40,8 @@ public:
     // long get_timestamp() {return unwrapped_timestamp;}
     long get_timestamp() {return unwrapped_event_number;}
     uint32_t get_event_counter() {return event_counter[0];}
-    uint32_t get_sample_adc(int channel, int sample) {return adc[channel][sample];}
-    uint32_t get_samepl_toa(int channel, int sample) {return toa[channel][sample];}
+    uint32_t get_sample_adc(int channel, int sample) {return 0;}//adc[channel][sample];}
+    uint32_t get_sample_toa(int channel, int sample) {return toa[channel][sample];}
     uint32_t get_sample_tot(int channel, int sample) {return tot[channel][sample];}
     
     friend class waveform_builder;

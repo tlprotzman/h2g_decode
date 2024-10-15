@@ -19,6 +19,8 @@ event_writer::event_writer(const std::string &file_name) {
     num_channels = 144 * num_kcu;
     event_number = 0;
 
+    std::cout << "making event writer with " << num_kcu << " KCUs, " << num_samples << " samples, and " << num_channels << " channels" << std::endl;
+
     this->file_name = file_name;
     file = new TFile(file_name.c_str(), "RECREATE");
     tree = new TTree("events", "Events");
@@ -37,6 +39,12 @@ event_writer::event_writer(const std::string &file_name) {
         event_values.samples_adc[i] = new uint[num_samples];
         event_values.samples_toa[i] = new uint[num_samples];
         event_values.samples_tot[i] = new uint[num_samples];
+        for (int j = 0; j < num_samples; j++) {
+            std::cout << "making sample " << i << ", " << j << std::endl;
+            event_values.samples_adc[i][j] = 0;
+            event_values.samples_toa[i][j] = 0;
+            event_values.samples_tot[i][j] = 0;
+        }
     }
 
     tree->Branch("adc", event_values.samples_adc, Form("adc[%d][%d]/i", num_channels, num_samples));
@@ -75,11 +83,16 @@ void event_writer::write_event(aligned_event *event) {
             event_values.hit_max[channel_index] = 0;
             event_values.hit_pedestal[channel_index] = e->get_sample_adc(j, 0);
             for (int k = 0; k < num_samples; k++) {
-                event_values.samples_adc[channel_index][k] = e->get_sample_adc(j, k);
+                if (channel_index == 200 && k == 4) {
+                    if (event_values.samples_adc[channel_index][k] != 0) {
+                        std::cout << "sample " << k << " has adc " << event_values.samples_adc[channel_index][k] << std::endl;
+                    }
+                }
+                event_values.samples_adc[channel_index][k] = 0;// e->get_sample_adc(j, k);
                 if (event_values.samples_adc[channel_index][k] > event_values.hit_max[channel_index]) {
                     event_values.hit_max[channel_index] = event_values.samples_adc[channel_index][k];
                 }
-                event_values.samples_toa[channel_index][k] = e->get_samepl_toa(j, k);
+                event_values.samples_toa[channel_index][k] = e->get_sample_toa(j, k);
                 event_values.samples_tot[channel_index][k] = e->get_sample_tot(j, k);
             }
             // std::cout << std::endl;
