@@ -52,6 +52,7 @@ private:
     std::vector<std::list<sample*>*> *samples;
     uint32_t events_aborted;
     uint32_t events_completed;
+    int32_t num_found[16];
 
     uint32_t bit_converter(uint8_t *buffer, int start, bool big_endian=true);
     uint8_t decode_fpga(uint8_t fpga_id);

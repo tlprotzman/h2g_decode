@@ -52,12 +52,20 @@ bool kcu_event::is_complete() {
 }
 
 bool kcu_event::is_ordered() {
+    bool in_order = true;
     for (int i = 1; i < found; i++) {
         if (event_counter[i] != (event_counter[i - 1] + 1) % 64) {
-            return false;
+            in_order = false;
         }
     }
-    return true;
+    // if (!in_order) {
+    //     std::cout << "Out of order event: ";
+    //     for (int i = 0; i < found; i++) {
+    //         std::cout << event_counter[i] << "\t";
+    //     }
+    //     std::cout << "\n";
+    // }
+    return in_order;
 }
 
 waveform_builder::waveform_builder(uint32_t fpga_id, uint32_t num_samples) {
@@ -113,17 +121,17 @@ bool waveform_builder::build(std::list<sample*> *samples) {
         for (auto event = in_progress->rbegin(); event != in_progress->rend(); event++) {
             // Check if it's an existing timestamp and we just need to add this asic/half
             for (uint32_t i = 0; i < (*event)->found; i++) {
-                // std::cout << "Adding to existing sample" << std::endl;
-                // if ((*event)->timestamp[i] == s->timestamp) {
-                if ((*event)->timestamp[i] - s->timestamp < 2 || s->timestamp - (*event)->timestamp[i] < 1) { // Try allowing for some jitter
-                    auto offset = 72 * s->asic + 36 * s->half;
+                auto offset = 72 * s->asic + 36 * s->half;
+                // std::cout << "Comparing " << (*event)->timestamp[i] << " and " << s->timestamp << " (offset " << offset << ", event number " << s->event_counter << ")" << std::endl;
+                if ((*event)->timestamp[i] - s->timestamp < 1 || s->timestamp - (*event)->timestamp[i] < 1) { // Try allowing for some jitter
+                    // std::cout << "Adding to existing sample" << std::endl;
                     for (int j = 0; j < 36; j++) {
                         (*event)->adc[j + offset][i] = s->adc[j];
                         (*event)->toa[j + offset][i] = s->toa[j];
                         (*event)->tot[j + offset][i] = s->tot[j];
                     }
                     found = true;
-                    if (offset == 0) {
+                    if (offset == 72) {
                         (*event)->bunch_counter[i] = s->bunch_counter;
                         (*event)->event_counter[i] = s->event_counter;
                         (*event)->orbit_counter[i] = s->orbit_counter;
@@ -148,7 +156,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
             // Next, check if it before the start of a existing series
             if ((*event)->timestamp[0] - s->timestamp <= 41 * (num_samples - (*event)->found)) {
                 // std::cout << "FOUND ONE AHEAD OF SERIES!!" << std::endl;
-                // std::cout << "Adding to beginning of series" << std::endl;
+                // std::cout << "Adding to beginning of series for kcu " << this->fpga_id << std::endl;
                 auto offset = 72 * s->asic + 36 * s->half;
                 // First, shift all existing samples later in the series
                 int shift_by = ((*event)->timestamp[0] - s->timestamp) / 41;
@@ -177,7 +185,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                     (*event)->tot[j + offset][0] = s->tot[j];
                 }
                 (*event)->timestamp[0] = s->timestamp;
-                if (offset == 0) {
+                if (offset == 72) {
                     (*event)->bunch_counter[0] = s->bunch_counter;
                     (*event)->event_counter[0] = s->event_counter;
                     (*event)->orbit_counter[0] = s->orbit_counter;
@@ -201,7 +209,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                 }
                 
                 (*event)->timestamp[(*event)->found] = s->timestamp;
-                if (offset == 0) {
+                if (offset == 72) {
                     (*event)->bunch_counter[(*event)->found] = s->bunch_counter;
                     (*event)->event_counter[(*event)->found] = s->event_counter;
                     (*event)->orbit_counter[(*event)->found] = s->orbit_counter;
@@ -214,6 +222,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
             }
             if (s->timestamp - (*event)->timestamp[(*event)->found - 1] <= 41 * (num_samples - (*event)->found)) {
                 // std::cout << "FOUND ONE LATER IN SERIES!!" << std::endl;
+                // std::cout << "Adding to end of series for kcu " << this->fpga_id << std::endl;
                 // If it is later in the sample, we will shuffle the found sample to later in the list so it is found again
                 samples->push_back(s);
                 sample_itr = samples->erase(sample_itr);
@@ -222,20 +231,22 @@ bool waveform_builder::build(std::list<sample*> *samples) {
             }
         }
         if (!found && !skip) {
+            auto offset = 72 * s->asic + 36 * s->half;
             // Create a new kcu_event
-            // std::cout << "Creating new event" << std::endl;
+            // std::cout << "Creating new event with timestamp " << s->timestamp << ", offset " << offset << ", and event number " << s->event_counter << std::endl;
             auto event = new kcu_event(fpga_id, num_samples);
             attempted++;
-            auto offset = 72 * s->asic + 36 * s->half;
             for (int j = 0; j < 36; j++) {
                 event->adc[j + offset][0] = s->adc[j];
                 event->toa[j + offset][0] = s->toa[j];
                 event->tot[j + offset][0] = s->tot[j];
             }
             event->timestamp[0] = s->timestamp;
-            event->bunch_counter[0] = s->bunch_counter;
-            event->event_counter[0] = s->event_counter;
-            event->orbit_counter[0] = s->orbit_counter;
+            if (offset == 72) {
+                event->bunch_counter[0] = s->bunch_counter;
+                event->event_counter[0] = s->event_counter;
+                event->orbit_counter[0] = s->orbit_counter;
+            }
             event->found = 1;
             event->added = 1;
             in_progress->push_back(event);

@@ -37,10 +37,11 @@ event_writer::event_writer(const std::string &file_name) {
         event_values.samples_adc[i] = new uint[num_samples];
         event_values.samples_toa[i] = new uint[num_samples];
         event_values.samples_tot[i] = new uint[num_samples];
-        tree->Branch("adc", event_values.samples_adc[i], Form("adc[%d][%d]/i", num_channels, num_samples));
-        tree->Branch("toa", event_values.samples_toa[i], Form("toa[%d][%d]/i", num_channels, num_samples));
-        tree->Branch("tot", event_values.samples_tot[i], Form("tot[%d][%d]/i", num_channels, num_samples));
     }
+
+    tree->Branch("adc", event_values.samples_adc, Form("adc[%d][%d]/i", num_channels, num_samples));
+    tree->Branch("toa", event_values.samples_toa, Form("toa[%d][%d]/i", num_channels, num_samples));
+    tree->Branch("tot", event_values.samples_tot, Form("tot[%d][%d]/i", num_channels, num_samples));
 
     event_values.hit_x = new uint[num_channels];
     event_values.hit_y = new uint[num_channels];
@@ -81,6 +82,7 @@ void event_writer::write_event(aligned_event *event) {
                 event_values.samples_toa[channel_index][k] = e->get_samepl_toa(j, k);
                 event_values.samples_tot[channel_index][k] = e->get_sample_tot(j, k);
             }
+            // std::cout << std::endl;
         }
     }
 

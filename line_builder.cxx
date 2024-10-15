@@ -16,12 +16,26 @@ line_builder::line_builder(uint32_t num_fpga) {
     }
     events_aborted = 0;
     events_completed = 0;
+    for (int i = 0; i < 16; i++) {
+        num_found[i] = 0;
+    }
 }
 
 line_builder::~line_builder() {
     auto percent_lost = (float)(in_progress->size() + events_aborted) / (float)(in_progress->size() + events_aborted + complete->size() + events_completed);
     percent_lost *= 100;
     std::cout << "LINE BUILDER: Ended with " << in_progress->size() + events_aborted << " in progress and " << complete->size() + events_completed << " complete (" << percent_lost << "\% lost)" << std::endl;
+
+    int mean = 0;
+    for (int i = 0; i < 16; i++) {
+        mean += num_found[i];
+    }
+    mean /= 16;
+
+    std::cout << "LINE BUILDER: Each device found " << std::endl;
+    for (int i = 0; i < 16; i++) {
+        std::cout << "Device " << i << " found " << num_found[i] << " times (" << num_found[i] - mean << " away from mean)" << std::endl;
+    }
     
     for (auto ls : *in_progress) {
         for (int i = 0; i < 5; i++) {
@@ -81,6 +95,7 @@ void line_builder::decode_line(uint8_t *buffer, line *l) {
     l->asic = decode_asic(buffer[0]);
     l->fpga = decode_fpga(buffer[1]);
     l->half = decode_half(buffer[2]);
+    num_found[l->fpga * 4 + l->asic * 2 + l->half]++;
     l->line_number = buffer[3];
     l->timestamp = bit_converter(buffer, 4);
     for (int i = 0; i < 8; i++) {
@@ -120,7 +135,7 @@ bool line_builder::process_packet(uint8_t *packet) {
         // Check if there is a line stream for this package
         bool found = false;
         for (auto ls = in_progress->rbegin(); ls != in_progress->rend(); ls++) {
-            if ((*ls)->fpga == l->fpga && (*ls)->timestamp == l->timestamp) {
+            if ((*ls)->fpga == l->fpga && (*ls)->asic == l->asic && (*ls)->half == l->half && (*ls)->timestamp == l->timestamp) {
                 found = true;
                 if ((*ls)->lines[l->line_number] != nullptr) {
                     std::cerr << "Duplicate line " << l->line_number << " for FPGA " << l->fpga << " at timestamp " << l->timestamp << std::endl;
@@ -129,7 +144,7 @@ bool line_builder::process_packet(uint8_t *packet) {
                 (*ls)->lines[l->line_number] = l;
                 (*ls)->found++;
                 if (is_complete(*ls)) {
-                    complete->push_back(std::move(*ls));
+                    complete->push_back(std::move(*ls));        // is this being done correctly? 
                     in_progress->erase(std::next(ls).base());
                     ls--;
                 }
@@ -139,10 +154,12 @@ bool line_builder::process_packet(uint8_t *packet) {
         // If we didn't find a line stream, create a new one
         if (!found) {
             auto ls = new struct line_stream;
-            for (int i = 0; i < 5; i++) {
-                ls->lines[i] = nullptr;
+            for (int j = 0; j < 5; j++) {
+                ls->lines[j] = nullptr;
             }
             ls->fpga = l->fpga;
+            ls->asic = l->asic;
+            ls->half = l->half;
             ls->timestamp = l->timestamp;
             ls->lines[l->line_number] = l;
             ls->found = 1;
