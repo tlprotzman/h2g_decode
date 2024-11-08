@@ -2,7 +2,7 @@
 CXX := g++
 
 # Compiler flags
-CXXFLAGS := -g -Werror $(shell root-config --cflags)
+CXXFLAGS := -g -O3 -Werror $(shell root-config --cflags)
 
 # Linker flags
 LDFLAGS := $(shell root-config --ldflags) $(shell root-config --glibs)

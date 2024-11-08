@@ -2,3 +2,11 @@
 .vscode
 *.h2g
 h2g_decode
+*.txt
+*.pdf
+*.root
+*.root.new
+*.pcm
+*.so
+*.d
+.DS_Store

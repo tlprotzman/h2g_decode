@@ -20,6 +20,10 @@ private:
         uint *timestamps;   // The four timestamps for the first sample of each event
 
         // Raw waveform
+        uint *adc_block;
+        uint *toa_block;
+        uint *tot_block;
+
         uint **samples_adc;
         uint **samples_toa;
         uint **samples_tot;
@@ -28,6 +32,7 @@ private:
         uint *hit_x;
         uint *hit_y;
         uint *hit_z;
+        bool *good_channel;
 
         // Some processing to quickly draw results
         uint *hit_max;
@@ -43,6 +48,8 @@ private:
     std::string file_name;
     TFile *file;
     TTree *tree;
+
+    bool decode_position(int channel, int &x, int &y, int &z);
 
 public:
     event_writer(const std::string &file_name);
