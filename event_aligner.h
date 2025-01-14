@@ -11,16 +11,19 @@ Takes a collection of built waveforms and attempts to align them across multiple
 class aligned_event {
 private:
     uint32_t num_fpga;
+    uint32_t channels_per_fpga;
     uint32_t events_found;
     long *timestamp;
     kcu_event **events;
 
 public:
-    aligned_event(uint32_t num_fpga);
+    aligned_event(uint32_t num_fpga, uint32_t channels_per_fpga);
     ~aligned_event();
 
     bool is_complete();
     kcu_event *get_event(uint32_t fpga) {return events[fpga];}
+    uint32_t get_num_fpga() {return num_fpga;}
+    uint32_t get_channels_per_fpga() {return channels_per_fpga;}
 
     friend class event_aligner;
 };

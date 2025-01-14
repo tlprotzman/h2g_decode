@@ -91,7 +91,7 @@ double exp_mod_gaussian(double *x, double *par) {
     return offset + (lambda / 2) * exp_term * erf_term;
 }
 
-int identify_muon_track(float column_sum[8], float column_N[8][64]) {
+int identify_muon_track_a(float column_sum[8], float column_N[8][64]) {
     // Find the column with the most "energy"
     int max_column = 0;
     float max_value = 0;
@@ -128,7 +128,27 @@ int identify_muon_track(float column_sum[8], float column_N[8][64]) {
     if (num_below_threshold_in_column > 20) {
         return -1;
     }
-    return max_column;
+    return 1 << max_column;
+}
+
+int identify_muon_track_b(float column_sum[8], float column_N[8][64]) {
+    int ret = 0b00000000;
+    for (int i = 0; i < 8; i++) {
+        int above_threshold = 0;
+        for (int j = 0; j < 64; j++) {
+            if (column_N[i][j] > 20) {
+                above_threshold++;
+            }
+        }
+        if (above_threshold > 4) {
+            ret |= 1 << i;
+        }
+    }
+    return ret;
+}
+
+int identify_muon_track(float column_sum[8], float column_N[8][64]) {
+    return identify_muon_track_b(column_sum, column_N);
 }
 
 
@@ -204,15 +224,19 @@ void draw_waveforms(int run_number) {
     // Event display histogram
     auto *event_display = new TH3F("event_display", "Event Display;X;Z;Y", 4, 0, 4, 64, 0, 64, 2, 0, 2);
 
+    // Longitudinal profile
+    auto *longitudinal_profile = new TH2F("longitudinal_profile", "Longitudinal Profile;Z;N", 64, 0, 64, 250, 0, 2000);
+
     // Loop over entries in the tree
     int nEntries = tree->GetEntries();
     std::cout << "Number of entries: " << nEntries << std::endl;
     // Dummy histo to set the axis
-    TH1F *histo = new TH1F("histo", "Waveform", 10, 0, 10);
+    TH1F *histo = new TH1F("histo", "Waveform", 10, 0, 9.5);
     histo->GetXaxis()->SetTitle("Sample");
     histo->GetYaxis()->SetTitle("ADC");
-    histo->SetMaximum(1500);
-    histo->SetMinimum(0);
+    histo->SetMaximum(160);
+    histo->SetMinimum(65);
+
 
     // Initial fit parameters
     double par[7];
@@ -250,6 +274,9 @@ void draw_waveforms(int run_number) {
     // maximums 
     float max_n = 0;
     float max_int = 0;
+
+    int muons_searched_for = 0;
+    int muons_identified = 0;
 
 
     // Save as multi page pdf
@@ -306,29 +333,30 @@ void draw_waveforms(int run_number) {
             // Fit the graph with a landau curve
             // TF1 *fit = new TF1("fit", "landau", 0, 10);
             // fit->SetParameter(1, 3);
-            TF1 *fit = new TF1("fit", crystal_ball, 0, 9, 6);
+            TF1 *fit = new TF1("fit", crystal_ball, 0, 9.5, 6);
             // TF1 *fit = new TF1("fit", exp_mod_gaussian, 0, 10, 4);
             fit->SetParameters(par);
             // fit->FixParameter(0, 2);
             // fit->FixParameter(1, 500);
             // fit->FixParameter(3, 1);
-            fit->SetParLimits(0, 1, 3);   // alpha
+            fit->SetParLimits(0, 1, 1.2);   // alpha
             // fit->SetParLimits(0, 0, 5);   // alpha
-            // fit->SetParameter(0, 0.5);   // alpha
-            fit->SetParLimits(1, 0.2, 1);   // n
+            // fit->FixParameter(0, 1.1);   // alpha
+            // fit->FixParameter(1, 0.43);   // alpha
+            fit->SetParLimits(1, 0.2, 0.6);   // n
             fit->SetParLimits(2, 0.5, 4.5);   // x_bar
-            // fit->SetParLimits(3, 0, 0.5);   // sigma
-            fit->SetParameter(3, 0.25);
+            fit->SetParLimits(3, 0.25, 0.65);   // sigma
+            // fit->FixParameter(3, 0.25);
             fit->SetParLimits(4, 0, 2000);  // N
             // Set offset
-            if (pedestals) {
+            if (true && pedestals) {
                 fit->FixParameter(5, pedestals->GetBinContent(channel));
             } else {
-                fit->FixParameter(5, 70);
+                fit->FixParameter(5, (waveform[channel][0] + waveform[channel][9]) / 2);
             }
             double N = 0;
             if (constant_chi2 > 500) {
-                graph->Fit(fit, "Q0", "");
+                graph->Fit(fit, "Q0", "", 0, 9);
                 N = fit->GetParameter(4);
                 // if (N > 200) {
                     alpha_hist->Fill(channel, fit->GetParameter(0), N);
@@ -339,7 +367,7 @@ void draw_waveforms(int run_number) {
                     offset_hist->Fill(channel, fit->GetParameter(5), N);
                 // }
             }
-            double crystal_ball_chi2 = fit->GetChisquare();// / fit->GetNDF();
+            double crystal_ball_chi2 = fit->GetChisquare() / fit->GetNDF();
             // Save the fit parameters
 
             // auto mpv = fit->GetParameter(1);
@@ -351,6 +379,7 @@ void draw_waveforms(int run_number) {
             column_N[index][channel_z[channel]] = N;
 
             fit_magnitude[channel]->Fill(N);
+            longitudinal_profile->Fill(channel_z[channel], N);
             event_display->Fill(channel_x[channel], channel_z[channel], channel_y[channel], N);
             
             if (N > max_n) {
@@ -368,83 +397,137 @@ void draw_waveforms(int run_number) {
             
             int draw = 0;
             if (draw) {
+                // if (channel != 61) {
+                //     continue;
+                // }
+                canvas->SetTopMargin(0.05);
+                canvas->SetRightMargin(0.05);
                 histo->SetTitle(Form("Event %d Channel %d", i, channel));
+                histo->SetTitle("");
                 histo->Draw();
+                histo->GetXaxis()->SetTitleSize(0.05);
+                histo->GetXaxis()->SetTitleOffset(0.795);
+                histo->GetYaxis()->SetTitleSize(0.05);
+                histo->GetYaxis()->SetTitleOffset(0.81);
                 graph->SetMarkerStyle(20);
                 graph->Draw("same p");
-                fit->Draw("same");
-                constant_fit->SetLineColor(kBlue);
-                constant_fit->Draw("same");
+                fit->SetFillColorAlpha(kAzure+6, 0.15);
+                fit->SetFillStyle(1001);
+                fit->SetLineColor(kBlue);
+                fit->Draw("same E3");
+                auto fit_copy = (TF1*)fit->Clone();
+                fit_copy->SetFillStyle(0);
+                fit_copy->DrawCopy("same");
+                // constant_fit->SetLineColor(kBlue);
+                // constant_fit->Draw("same");
                 TLatex latex;
                 latex.SetNDC();
-                latex.SetTextSize(0.03);
-                latex.SetTextAlign(31);
                 // latex.DrawLatex(0.15, 0.85, Form("alpha = %.f", fit->GetParameter(0)));
                 // latex.DrawLatex(0.15, 0.80, Form("n = %.2f", fit->GetParameter(1)));
                 // latex.DrawLatex(0.15, 0.75, Form("x_bar = %.2f", fit->GetParameter(2)));
                 // latex.DrawLatex(0.15, 0.70, Form("sigma = %.2f", fit->GetParameter(3)));
                 // latex.DrawLatex(0.15, 0.65, Form("offset = %.2f", fit->GetParameter(4)));
+                latex.SetTextSize(0.04);
+                latex.SetTextFont();
+                latex.SetTextAlign(11);
+                latex.DrawLatex(0.15, 0.9, "LFHCal Test Beam");
+                latex.SetTextFont(42);
+                latex.SetTextSize(0.035);
+                latex.DrawLatex(0.15, 0.86, "CERN PS, 5 GeV#mu^{+}");
+                latex.DrawLatex(0.15, 0.82, Form("Run %d Event %d Channel %d", run_number, i, channel));
+                // latex.DrawLatex(0.15, 0.78, Form("Coordinate: (%d, %d, %d)", channel_x[channel], channel_y[channel], channel_z[channel]));
+                latex.DrawLatex(0.15, 0.78, Form("V_{op} = 43 V"));
 
-                latex.DrawLatex(0.875, 0.85, Form("alpha = %.2f", fit->GetParameter(0)));
-                latex.DrawLatex(0.875, 0.80, Form("n = %.2f", fit->GetParameter(1)));
-                latex.DrawLatex(0.875, 0.75, Form("x_bar = %.2f", fit->GetParameter(2)));
-                latex.DrawLatex(0.875, 0.70, Form("sigma = %.2f", fit->GetParameter(3)));
-                latex.DrawLatex(0.875, 0.65, Form("N = %.2f", fit->GetParameter(4)));
-                latex.DrawLatex(0.875, 0.60, Form("offset = %.2f", fit->GetParameter(5)));
-                latex.DrawLatex(0.875, 0.55, Form("constant chi^2 = %.2f", constant_chi2));
-                latex.DrawLatex(0.875, 0.50, Form("crystal ball chi^2 = %.2f", crystal_ball_chi2));
+                latex.SetTextAlign(11);
+                latex.SetTextFont(62);
+                latex.DrawLatex(0.65, 0.9, "Crystal Ball Fit Parameters");
+                latex.SetTextFont(42);
+                latex.DrawLatex(0.65, 0.86, Form("#alpha = %.2f", fit->GetParameter(0)));
+                latex.DrawLatex(0.65, 0.82, Form("n = %.2f", fit->GetParameter(1)));
+                latex.DrawLatex(0.65, 0.78, Form("#bar{x} = %.2f", fit->GetParameter(2)));
+                latex.DrawLatex(0.65, 0.74, Form("#sigma = %.2f", fit->GetParameter(3)));
+                latex.DrawLatex(0.65, 0.70, Form("N = %.2f", fit->GetParameter(4)));
+                latex.DrawLatex(0.65, 0.66, Form("offset = %.2f", fit->GetParameter(5)));
+                // latex.DrawLatex(0.65, 0.67, Form("constant chi^2 = %.2f", constant_chi2));
+                latex.DrawLatex(0.65, 0.62, Form("#chi^{2}/NDF = %.2f", crystal_ball_chi2));
                 canvas->Update();
-                if (N > draw) {
+                if (N > draw && crystal_ball_chi2 < 3) {
                     canvas->Print(Form("waveforms_run%d.pdf", run_number));
+                    // std::cout << "saving waveform" << std::endl;
+                    canvas->Print(Form("candidate_waveforms/waveform_run%d_event%d_channel%d.png", run_number, i, channel));
                 }
             }
             delete graph;
     
         }
         // identify if we have a muon track
-        int muon_track = identify_muon_track(column_sum, column_N);
-        if (muon_track != -1) {
-            for (int j = 0; j < 64; j++) {
-                muon_track_fit_magnitude[column_index[muon_track][j]]->Fill(column_N[muon_track][j]);
+        int muon_tracks = identify_muon_track(column_sum, column_N);
+        muons_searched_for++;
+        if (muon_tracks) {
+            muons_identified++;
+        }
+        for (int i = 0; i < 8; i++) {
+            if (muon_tracks & (1 << i)) {
+                for (int j = 0; j < 64; j++) {
+                    muon_track_fit_magnitude[column_index[i][j]]->Fill(column_N[i][j]);
+                }
             }
         }
     
         canvas->Clear();
-        canvas->Divide(2, 2);
-        if (muon_track != -1) {
-            event_display->SetTitle(Form("Run %d Event %d: Muon in column %d", run_number, i, muon_track));
+        // canvas->Divide(2, 2);
+        if (muon_tracks) {
+            event_display->SetTitle(Form("Run %d Event %d: Muon in column %d", run_number, i, muon_tracks));
         } else {
             event_display->SetTitle(Form("Run %d Event %d", run_number, i));
         }
         
-        canvas->cd(1);
-        event_display->Draw("box2z");
-        auto event_display_copy = (TH3F*)event_display->Clone();
+        // canvas->cd(1);
+        // event_display->SetTitle("");
+        event_display->Draw("box2");
         
-        canvas->cd(2);
-        auto tmp = event_display_copy->Project3D("zx");
-        tmp->SetTitle("XY View");
-        tmp->Draw("colz");
-        
-        canvas->cd(3);
-        tmp = event_display_copy->Project3D("zy");
-        tmp->SetTitle("ZY View");
-        tmp->Draw("colz");
-        
-        canvas->cd(4);
-        tmp = event_display_copy->Project3D("xy");
-        tmp->SetTitle("ZX View");
-        tmp->Draw("colz");
+        TLatex latex;
+        latex.SetNDC();
+        latex.SetTextSize(0.035);
+        latex.SetTextAlign(11);
+        latex.SetTextFont(62);
+        latex.DrawLatex(0.1, 0.92, "LFHCal Test Beam");
+        latex.SetTextFont(42);
+        latex.DrawLatex(0.1, 0.88, "CERN PS, 5 GeV #mu^{+}");
+        latex.DrawLatex(0.1, 0.84, Form("Run %d Event %d", run_number, i));
 
-        canvas->Update();
+        event_display->GetXaxis()->SetTitleOffset(1.5);
+        event_display->GetYaxis()->SetTitleOffset(2);
+        event_display->GetZaxis()->SetTitleOffset(1.2);
+        // auto event_display_copy = (TH3F*)event_display->Clone();
+        
+        // canvas->cd(2);
+        // auto tmp = event_display_copy->Project3D("zx");
+        // tmp->SetTitle("XY View");
+        // tmp->Draw("colz");
+        
+        // canvas->cd(3);
+        // tmp = event_display_copy->Project3D("zy");
+        // tmp->SetTitle("ZY View");
+        // tmp->Draw("colz");
+        
+        // canvas->cd(4);
+        // tmp = event_display_copy->Project3D("xy");
+        // tmp->SetTitle("ZX View");
+        // tmp->Draw("colz");
+
+        // canvas->Update();
         canvas->Print(Form("waveforms_run%d.pdf", run_number));
-        canvas->Clear();
-        canvas->Divide(1, 1);
+        canvas->Print(Form("candidate_event_display/event_display_run%d_event%d.png", run_number, i));
+        // canvas->Clear();
+        // canvas->Divide(1, 1);
     }
     canvas->Print(Form("waveforms_run%d.pdf]", run_number));
     // canvas->Print(Form("event_display_run%d.pdf]", run_number));
     std::cout << "Max N: " << max_n << std::endl;
     std::cout << "Max Integral: " << max_int << std::endl;
+    std::cout << "Muons searched for: " << muons_searched_for << std::endl;
+    std::cout << "Muons identified: " << muons_identified << std::endl;
 
     if (pedestal_file) {
         pedestal_file->Close();
@@ -618,6 +701,7 @@ void draw_waveforms(int run_number) {
         fit_magnitude[i]->Write();
         muon_track_fit_magnitude[i]->Write();
         fit_integral[i]->Write();
+        longitudinal_profile->Write();
         // alpha_hist->Write();
         // n_hist->Write();
         // x_bar_hist->Write();

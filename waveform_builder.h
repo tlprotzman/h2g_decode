@@ -43,6 +43,8 @@ public:
     uint32_t get_sample_adc(int channel, int sample) {return adc[channel][sample];}
     uint32_t get_sample_toa(int channel, int sample) {return toa[channel][sample];}
     uint32_t get_sample_tot(int channel, int sample) {return tot[channel][sample];}
+
+    uint32_t get_n_samples() {return samples;}
     
     friend class waveform_builder;
 };

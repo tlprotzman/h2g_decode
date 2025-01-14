@@ -1,3 +1,4 @@
+*.png
 *.o
 .vscode
 *.h2g

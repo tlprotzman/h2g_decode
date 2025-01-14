@@ -6,8 +6,9 @@
 #include <list>
 #include <vector>
 
-aligned_event::aligned_event(uint32_t num_fpga) {
+aligned_event::aligned_event(uint32_t num_fpga, uint32_t channels_per_fpga) {
     this->num_fpga = num_fpga;
+    this->channels_per_fpga = channels_per_fpga;
     events_found = 0;
     timestamp = new long[num_fpga];
     events = new kcu_event*[num_fpga];
@@ -106,7 +107,7 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
         if (abs(max_range) < 1) {
             std::cout << "made new event" << std::endl;
             // Build a new aligned event
-            aligned_event *ae = new aligned_event(num_fpga);
+            aligned_event *ae = new aligned_event(num_fpga, 144);   // Number of channels is hardcoded for now
             ae->events = new kcu_event*[num_fpga];
             std::cout << "Event counters: ";
             for (uint32_t i = 0; i < num_fpga; i++) {
