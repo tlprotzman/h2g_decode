@@ -58,7 +58,7 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
     }
 
     while (!done) {
-        std::cout << "\n\n";
+        // std::cout << "\n\n";
         std::vector<long> timestamp_delta;
         long avg = 0;
         for (int i = 0; i < num_fpga; i++) {
@@ -66,12 +66,12 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
             auto next = iter;
             next++;
             if (next == single_kcu_events[i]->end()) {
-                std::cout << "huh?  We're at the end?" << std::endl;
+                // std::cout << "huh?  We're at the end?" << std::endl;
                 done = true;
                 break;
             }
             timestamp_delta.push_back((*next)->get_timestamp() -  last_good_timestamp[i]);
-            std::cout << (*next)->get_timestamp() << " - " << last_good_timestamp[i] << " = " << timestamp_delta.back() << std::endl;
+            // std::cout << (*next)->get_timestamp() << " - " << last_good_timestamp[i] << " = " << timestamp_delta.back() << std::endl;
             avg += timestamp_delta.back();
         }
         avg /= num_fpga;
@@ -103,65 +103,65 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
         // std::cout << "\tMax range: " << max_range << std::endl;
 
         // CASE 1: All deltas are within 1
-        std::cout << "Farthest off: " << timestamp_delta[farthest_off] << " Average: " << avg << " Difference: " << timestamp_delta[farthest_off] - avg << std::endl;
+        // std::cout << "Farthest off: " << timestamp_delta[farthest_off] << " Average: " << avg << " Difference: " << timestamp_delta[farthest_off] - avg << std::endl;
         if (abs(max_range) < 1) {
-            std::cout << "made new event" << std::endl;
+            // std::cout << "made new event" << std::endl;
             // Build a new aligned event
             aligned_event *ae = new aligned_event(num_fpga, 144);   // Number of channels is hardcoded for now
             ae->events = new kcu_event*[num_fpga];
-            std::cout << "Event counters: ";
+            // std::cout << "Event counters: ";
             for (uint32_t i = 0; i < num_fpga; i++) {
-                std::cout << "FPGA " << i << ": " << (*iters[i])->get_event_counter() << "\t";
+                // std::cout << "FPGA " << i << ": " << (*iters[i])->get_event_counter() << "\t";
                 ae->events[i] = *iters[i];
                 ae->timestamp[i] = (*iters[i])->get_timestamp();
                 iters[i]++;
                 last_good_timestamp[i] = (*iters[i])->get_timestamp();
             }
-            std::cout << std::endl;
-            std::cout << "Time stamps: ";
-            for (uint32_t i = 0; i < num_fpga; i++) {
-                std::cout << "FPGA " << i << ": " << ae->timestamp[i] << "\t";
-            }
-            std::cout << std::endl;
+            // std::cout << std::endl;
+            // std::cout << "Time stamps: ";
+            // for (uint32_t i = 0; i < num_fpga; i++) {
+            //     std::cout << "FPGA " << i << ": " << ae->timestamp[i] << "\t";
+            // }
+            // std::cout << std::endl;
             complete->push_back(ae);
         }
 
         // Check if the farthest off is too close or too far
         // else if ((*iters[farthest_off])->get_timestamp() - avg > 0) {
         else if (timestamp_delta[farthest_off] - avg > 0) {
-            std::cout << "Farthest (" << farthest_off << ") is too far ahead with max range of " << max_range << std::endl;
-            std::cout << "Avg: " << avg << " T0: " << last_good_timestamp[0] << " T1: " << last_good_timestamp[1] << " T2: " << last_good_timestamp[2] << " T3: " << last_good_timestamp[3] << std::endl;
-            std::cout << "Timestamps: "
-                        << (*iters[0])->get_timestamp() << " "
-                        << (*iters[1])->get_timestamp() << " "
-                        << (*iters[2])->get_timestamp() << " "
-                        << (*iters[3])->get_timestamp() << std::endl;
-            std::cout << "Delta: " << timestamp_delta[0] << " " << timestamp_delta[1] << " " << timestamp_delta[2] << " " << timestamp_delta[3] << std::endl << std::endl;
-            std::cout << "Event counters: "
-                        << (*iters[0])->get_event_counter() << " "
-                        << (*iters[1])->get_event_counter() << " "
-                        << (*iters[2])->get_event_counter() << " "
-                        << (*iters[3])->get_event_counter() << std::endl;
-            // Move the other three forwards
+            // std::cout << "Farthest (" << farthest_off << ") is too far ahead with max range of " << max_range << std::endl;
+            // std::cout << "Avg: " << avg << " T0: " << last_good_timestamp[0] << " T1: " << last_good_timestamp[1] << " T2: " << last_good_timestamp[2] << " T3: " << last_good_timestamp[3] << std::endl;
+            // std::cout << "Timestamps: "
+            //             << (*iters[0])->get_timestamp() << " "
+            //             << (*iters[1])->get_timestamp() << " "
+            //             << (*iters[2])->get_timestamp() << " "
+            //             << (*iters[3])->get_timestamp() << std::endl;
+            // std::cout << "Delta: " << timestamp_delta[0] << " " << timestamp_delta[1] << " " << timestamp_delta[2] << " " << timestamp_delta[3] << std::endl << std::endl;
+            // std::cout << "Event counters: "
+            //             << (*iters[0])->get_event_counter() << " "
+            //             << (*iters[1])->get_event_counter() << " "
+            //             << (*iters[2])->get_event_counter() << " "
+            //             << (*iters[3])->get_event_counter() << std::endl;
+            // // Move the other three forwards
             for (uint32_t i = 0; i < num_fpga; i++) {
                 if (i != farthest_off) {
                     iters[i]++;
                 }
             }
         } else {
-            std::cout << "Farthest (" << farthest_off << ") is too far behind with max range of " << max_range << std::endl;
-            std::cout << "Avg: " << avg << " T0: " << last_good_timestamp[0] << " T1: " << last_good_timestamp[1] << " T2: " << last_good_timestamp[2] << " T3: " << last_good_timestamp[3] << std::endl;
-            std::cout << "Timestamps: "
-                        << (*iters[0])->get_timestamp() << " "
-                        << (*iters[1])->get_timestamp() << " "
-                        << (*iters[2])->get_timestamp() << " "
-                        << (*iters[3])->get_timestamp() << std::endl;
-            std::cout << "Delta: " << timestamp_delta[0] << " " << timestamp_delta[1] << " " << timestamp_delta[2] << " " << timestamp_delta[3] << std::endl << std::endl;
-            std::cout << "Event counters: "
-                        << (*iters[0])->get_event_counter() << " "
-                        << (*iters[1])->get_event_counter() << " "
-                        << (*iters[2])->get_event_counter() << " "
-                        << (*iters[3])->get_event_counter() << std::endl;
+            // std::cout << "Farthest (" << farthest_off << ") is too far behind with max range of " << max_range << std::endl;
+            // std::cout << "Avg: " << avg << " T0: " << last_good_timestamp[0] << " T1: " << last_good_timestamp[1] << " T2: " << last_good_timestamp[2] << " T3: " << last_good_timestamp[3] << std::endl;
+            // std::cout << "Timestamps: "
+            //             << (*iters[0])->get_timestamp() << " "
+            //             << (*iters[1])->get_timestamp() << " "
+            //             << (*iters[2])->get_timestamp() << " "
+            //             << (*iters[3])->get_timestamp() << std::endl;
+            // std::cout << "Delta: " << timestamp_delta[0] << " " << timestamp_delta[1] << " " << timestamp_delta[2] << " " << timestamp_delta[3] << std::endl << std::endl;
+            // std::cout << "Event counters: "
+            //             << (*iters[0])->get_event_counter() << " "
+            //             << (*iters[1])->get_event_counter() << " "
+            //             << (*iters[2])->get_event_counter() << " "
+            //             << (*iters[3])->get_event_counter() << std::endl;
             // move this one forward
             iters[farthest_off]++;
         }

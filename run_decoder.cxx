@@ -94,8 +94,6 @@ std::list<aligned_event*> *run_event_builder(char *file_name) {
     const int NUM_KCU = 4;
     const int NUM_SAMPLES = 10;
 
-    // snprintf(file_name, 100, "Run%03d.h2g", 304);
-    // snprintf(file_name, 100, "/Users/tristan/epic/eeemcal/SiPM_tests/ijclab/pedscan_configs/runs/Run%03d.h2g", run_number);
     auto fs = new file_stream(file_name, NUM_KCU);
     auto lb = new line_builder(NUM_KCU);
     std::vector<waveform_builder*> wbs;
@@ -124,9 +122,7 @@ std::list<aligned_event*> *run_event_builder(char *file_name) {
     for (int i = 0; i < NUM_KCU; i++) {
         single_kcu_events[i] = wbs[i]->get_complete();
         std::cout << "KCU " << i << " has " << single_kcu_events[i]->size() << " events" << std::endl;
-
     }
-
 
     event_aligner *aligner = nullptr;
     std::cout << "done building waveforms, aligning..." << std::endl;

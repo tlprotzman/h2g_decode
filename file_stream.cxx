@@ -34,17 +34,18 @@ int file_stream::read_packet(uint8_t *buffer) {
     file.seekg(0, std::ios::end);
     if (file.tellg() - current_head < packet_size) {
         file.seekg(current_head, std::ios::beg);
-        std::cout << "FILE STREAM: Reached end of file with " << file.tellg() - current_head << " bytes remaining" << std::endl;
+        std::cout << "\nFILE STREAM: Reached end of file with " << file.tellg() - current_head << " bytes remaining" << std::endl;
+        std::cout << "current head is " << current_head << std::endl;
         return 0;   // Not enough bytes to read
     }
     file.seekg(current_head, std::ios::beg);    // Return to current point in file
     file.read(reinterpret_cast<char*>(buffer), packet_size);;
     current_head = file.tellg();
 
-    // if ((int)current_head * 100 / (int)end > current_percent) {
-    //     current_percent = current_head * 100 / end;
-    //     std::cout << "FILE STREAM: " << current_percent << "\% complete" << std::endl;
-    // }
+    if ((float)current_head / (float)end > current_percent + 0.00005) {
+        current_percent = (float)current_head / (float)end;
+        std::cout << "\rFILE STREAM: " << 100 * (float) current_head / (float)end << "\% complete";
+    }
 
     // Check if the read was successful
     if (file.rdstate() & std::ifstream::failbit || file.rdstate() & std::ifstream::badbit) {

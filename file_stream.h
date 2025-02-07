@@ -9,7 +9,7 @@ private:
     std::ifstream file;
     std::streampos current_head;
     std::streampos end;
-    int current_percent;
+    float current_percent;
     
     uint32_t num_fpgas;
 

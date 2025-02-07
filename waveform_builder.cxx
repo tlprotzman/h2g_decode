@@ -113,6 +113,11 @@ waveform_builder::~waveform_builder() {
 }
 
 bool waveform_builder::build(std::list<sample*> *samples) {
+    while (samples->size() > 100) {
+        auto s = samples->front();
+        delete s;
+        samples->pop_front();
+    }
     for (auto sample_itr = samples->begin(); sample_itr != samples->end(); sample_itr++) {
         auto s = *sample_itr;
         // Check if we have a kcu_event for this sample
@@ -167,7 +172,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                 }
                 for (int i = 0; i < shift_by; i++) {
                     for (int j = num_samples - 1; j > 0; j--) {
-                        for (int k = 0; k < 72; k++) {
+                        for (int k = 0; k < 36; k++) {
                             (*event)->adc[k + offset][j] = (*event)->adc[k + offset][j - 1];
                             (*event)->toa[k + offset][j] = (*event)->toa[k + offset][j - 1];
                             (*event)->tot[k + offset][j] = (*event)->tot[k + offset][j - 1];
@@ -264,8 +269,8 @@ bool waveform_builder::build(std::list<sample*> *samples) {
         delete e;
     }
     // Remove the sample
-    // samples->clear();
     // std::cout << "bailing with " << samples->size() << " samples left" << std::endl;
+    // samples->clear();
     return false;
 }
 
