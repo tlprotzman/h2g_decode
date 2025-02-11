@@ -1,5 +1,5 @@
+build/
 *.png
-*.o
 .vscode
 *.h2g
 h2g_decode
@@ -8,6 +8,5 @@ h2g_decode
 *.root
 *.root.new
 *.pcm
-*.so
 *.d
 .DS_Store
