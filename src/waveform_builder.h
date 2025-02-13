@@ -67,4 +67,8 @@ public:
     bool build(std::list<sample*> *samples);
     void unwrap_counters();
     std::list<kcu_event*>* get_complete() {return complete;}
+
+    uint32_t get_num_aborted();
+    uint32_t get_num_completed() {return completed;}
+    uint32_t get_num_in_order();
 };

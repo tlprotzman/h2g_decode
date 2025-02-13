@@ -19,7 +19,7 @@ event_writer::event_writer(const std::string &file_name) {
     num_channels = 144 * num_kcu;
     event_number = 0;
 
-    std::cout << "making event writer with " << num_kcu << " KCUs, " << num_samples << " samples, and " << num_channels << " channels" << std::endl;
+    // std::cout << "making event writer with " << num_kcu << " KCUs, " << num_samples << " samples, and " << num_channels << " channels" << std::endl;
 
     this->file_name = file_name;
     file = new TFile(file_name.c_str(), "RECREATE");

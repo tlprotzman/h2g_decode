@@ -33,7 +33,7 @@ event_aligner::event_aligner(uint32_t num_fpga) {
 }
 
 event_aligner::~event_aligner() {
-    std::cout << "EVENT ALIGNER: Ended with " << complete->size() << " complete" << std::endl;
+    // std::cout << "EVENT ALIGNER: Ended with " << complete->size() << " complete" << std::endl;
     for (auto it = complete->begin(); it != complete->end(); it++) {
         delete *it;
     }

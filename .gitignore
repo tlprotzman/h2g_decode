@@ -1,4 +1,5 @@
 build/
+output/
 *.png
 .vscode
 *.h2g

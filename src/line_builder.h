@@ -72,4 +72,8 @@ public:
     bool process_complete();
     std::list<sample*> *get_completed(uint32_t fpga);
 
+    int get_num_events_aborted();
+    int get_num_events_completed();
+    int get_num_found(int fpga, int asic, int half);
+
 };

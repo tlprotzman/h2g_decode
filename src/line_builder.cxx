@@ -22,20 +22,20 @@ line_builder::line_builder(uint32_t num_fpga) {
 }
 
 line_builder::~line_builder() {
-    auto percent_lost = (float)(in_progress->size() + events_aborted) / (float)(in_progress->size() + events_aborted + complete->size() + events_completed);
-    percent_lost *= 100;
-    std::cout << "LINE BUILDER: Ended with " << in_progress->size() + events_aborted << " in progress and " << complete->size() + events_completed << " complete (" << percent_lost << "\% lost)" << std::endl;
+    // auto percent_lost = (float)(in_progress->size() + events_aborted) / (float)(in_progress->size() + events_aborted + complete->size() + events_completed);
+    // percent_lost *= 100;
+    // std::cout << "LINE BUILDER: Ended with " << in_progress->size() + events_aborted << " in progress and " << complete->size() + events_completed << " complete (" << percent_lost << "\% lost)" << std::endl;
 
-    int mean = 0;
-    for (int i = 0; i < 16; i++) {
-        mean += num_found[i];
-    }
-    mean /= 16;
+    // int mean = 0;
+    // for (int i = 0; i < 16; i++) {
+    //     mean += num_found[i];
+    // }
+    // mean /= 16;
 
-    std::cout << "LINE BUILDER: Each device found " << std::endl;
-    for (int i = 0; i < 16; i++) {
-        std::cout << "Device " << i << " found " << num_found[i] << " times (" << num_found[i] - mean << " away from mean)" << std::endl;
-    }
+    // std::cout << "LINE BUILDER: Each device found " << std::endl;
+    // for (int i = 0; i < 16; i++) {
+    //     std::cout << "Device " << i << " found " << num_found[i] << " times (" << num_found[i] - mean << " away from mean)" << std::endl;
+    // }
     
     for (auto ls : *in_progress) {
         for (int i = 0; i < 5; i++) {
@@ -229,4 +229,16 @@ bool line_builder::process_complete() {
 
 std::list<sample*> *line_builder::get_completed(uint32_t fpga) {
     return samples->at(fpga);
+}
+
+int line_builder::get_num_events_aborted() {
+    return in_progress->size() + events_aborted;
+}
+
+int line_builder::get_num_events_completed() {
+    return complete->size() + events_completed;
+}
+
+int line_builder::get_num_found(int fpga, int asic, int half) {
+    return num_found[fpga * 4 + asic * 2 + half];
 }

@@ -82,34 +82,22 @@ waveform_builder::waveform_builder(uint32_t fpga_id, uint32_t num_samples) {
 
 waveform_builder::~waveform_builder() {
     for (auto e : *in_progress) {
-        aborted++;
+        // aborted++;
         delete e;
     }
     delete in_progress;
 
-    int in_order = 0;
-    for (auto e : *complete) {
-        bool ordered = true;
-        for (int i = 1; i < e->found; i++) {
-            if (e->event_counter[i] != (e->event_counter[i - 1] + 1) % 64) {
-                ordered = false;
-                break;
-            }
-        }
-        if (ordered) {
-            in_order++;
-        }
-    }
+    uint32_t in_order = get_num_in_order();
 
     for (auto e : *complete) {
         delete e;
     }
     delete complete;
 
-    auto percent_lost = (float)aborted / (float)attempted;
-    percent_lost *= 100;
-    std::cout << "WAVEFORM BUILDER: Ended with " << aborted << " in progress and " << completed << " complete (" << percent_lost << "\% lost)" << std::endl;
-    std::cout << "In order: " << in_order << std::endl;
+    // auto percent_lost = (float)aborted / (float)attempted;
+    // percent_lost *= 100;
+    // std::cout << "WAVEFORM BUILDER: Ended with " << aborted << " in progress and " << completed << " complete (" << percent_lost << "\% lost)" << std::endl;
+    // std::cout << "In order: " << in_order << std::endl;
 }
 
 bool waveform_builder::build(std::list<sample*> *samples) {
@@ -262,7 +250,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
         }
     }
     while (in_progress->size() > 2000) {
-        std::cout << "list too long" << std::endl;
+        // std::cout << "list too long" << std::endl;
         auto e = in_progress->front();
         aborted++;
         in_progress->pop_front();
@@ -292,4 +280,25 @@ void waveform_builder::unwrap_counters() {
         last_timestamp = e->timestamp[0];
         e->unwrapped_timestamp = e->timestamp[0] + (1<<30) * wrap_counter;
     }
+}
+
+uint32_t waveform_builder::get_num_aborted() {
+    return aborted + in_progress->size();
+}
+
+uint32_t waveform_builder::get_num_in_order() {
+    int in_order = 0;
+    for (auto e : *complete) {
+        bool ordered = true;
+        for (int i = 1; i < e->found; i++) {
+            if (e->event_counter[i] != (e->event_counter[i - 1] + 1) % 64) {
+                ordered = false;
+                break;
+            }
+        }
+        if (ordered) {
+            in_order++;
+        }
+    }
+    return in_order;
 }
