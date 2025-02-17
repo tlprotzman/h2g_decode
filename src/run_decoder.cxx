@@ -12,7 +12,7 @@ void test_line_builder(int run_number) {
     bool align = true;
     bool spectra = false;
     const int NUM_KCU = 4;
-    const int NUM_SAMPLES = 10;
+    const int NUM_SAMPLES = 20;
     char file_name[100];
     const char* data_path = std::getenv("DATA_PATH");
     const char* output_path = std::getenv("OUTPUT_PATH");
@@ -38,12 +38,23 @@ void test_line_builder(int run_number) {
     }
     uint8_t buffer[1452];
     int ret = fs->read_packet(buffer);
+    int heartbeat_counter = 0;
+    int heartbeat_resets = 0;
     while (ret) {
         if (ret == 1) {
+            heartbeat_counter = 0;
             lb->process_packet(buffer);
             lb->process_complete();
             for (int i = 0; i < NUM_KCU; i++) {
                 wbs[i]->build(lb->get_completed(i));
+            }
+        }
+        // Heartbeat reset
+        if (ret == 2) {
+            heartbeat_counter++;
+            if (heartbeat_counter > 3) {
+                heartbeat_resets++;
+                heartbeat_counter = 0;
             }
         }
         ret = fs->read_packet(buffer);
@@ -133,7 +144,7 @@ std::list<aligned_event*> *run_event_builder(char *file_name) {
     bool align = true;
     bool spectra = false;
     const int NUM_KCU = 4;
-    const int NUM_SAMPLES = 10;
+    const int NUM_SAMPLES = 20;
 
     auto fs = new file_stream(file_name, NUM_KCU);
     auto lb = new line_builder(NUM_KCU);

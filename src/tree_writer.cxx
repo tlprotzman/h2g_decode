@@ -15,7 +15,7 @@
 
 event_writer::event_writer(const std::string &file_name) {
     num_kcu = 4;
-    num_samples = 10;
+    num_samples = 20;
     num_channels = 144 * num_kcu;
     event_number = 0;
 
