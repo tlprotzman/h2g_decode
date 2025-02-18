@@ -193,14 +193,14 @@ bool line_builder::process_complete() {
         s->hamming_code = (header >> 4) & 0b111;
 
         auto cm = ls->lines[0]->package[1];
-        auto calib = ls->lines[3]->package[5];
+        auto calib = ls->lines[2]->package[4];
         auto crc = ls->lines[4]->package[7];
 
         int ch = 0;
         for (int i = 0; i < 5; i++) {
             for (int j = 0; j < 8; j++) {
                 // Skip what we've already defined
-                if ((i == 0 && j == 0) | (i == 0 && j == 1) | (i == 3 && j == 5) | (i == 4 && j == 7)) {
+                if ((i == 0 && j == 0) | (i == 0 && j == 1) | (i == 2 && j == 4) | (i == 4 && j == 7)) {
                     continue;
                 }
                 // Now we have each channel, we can decode the ADC value out of it
