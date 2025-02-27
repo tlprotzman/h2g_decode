@@ -5,6 +5,11 @@
 #include "tree_writer.h"
 #include "stat_logger.h"
 
+#ifdef __APPLE__
+#include <os/log.h>
+#include <os/signpost.h>
+#endif
+
 #include <string>
 #include <vector>
 
@@ -25,7 +30,16 @@ void test_line_builder(int run_number) {
         return;
     }
 
+    // Set up debug logging
     stat_logger *logger = new stat_logger(NUM_KCU);
+    #ifdef __APPLE__
+    auto signpost_logger = os_log_create("com.tristan.app", "run_decoder");
+    auto signpost_id = os_signpost_id_generate(signpost_logger);
+    assert(signpost_id != OS_SIGNPOST_ID_INVALID);
+    auto detailed_signpost_id = os_signpost_id_generate(signpost_logger);
+    assert(detailed_signpost_id != OS_SIGNPOST_ID_INVALID);
+    #endif
+
 
     snprintf(file_name, 100, "%s/Run%03d.h2g", data_path, run_number);
     // snprintf(file_name, 100, "Run%03d.h2g", 304);
@@ -33,6 +47,12 @@ void test_line_builder(int run_number) {
     auto fs = new file_stream(file_name, NUM_KCU);
     auto lb = new line_builder(NUM_KCU);
     std::vector<waveform_builder*> wbs;
+    
+    #ifdef __APPLE__
+    os_signpost_interval_begin(signpost_logger, signpost_id, "Reading packets");
+    #endif
+
+
     for (int i = 0; i < NUM_KCU; i++) {
         wbs.push_back(new waveform_builder(i, NUM_SAMPLES));
     }
@@ -43,11 +63,29 @@ void test_line_builder(int run_number) {
     while (ret) {
         if (ret == 1) {
             heartbeat_counter = 0;
+            #ifdef __APPLE__
+            os_signpost_interval_begin(signpost_logger, detailed_signpost_id, "Processing packet");
+            #endif
             lb->process_packet(buffer);
+            #ifdef __APPLE__
+            os_signpost_interval_end(signpost_logger, detailed_signpost_id, "Processing packet");
+            #endif
+            #ifdef __APPLE__
+            os_signpost_interval_begin(signpost_logger, detailed_signpost_id, "Processing complete");
+            #endif
             lb->process_complete();
+            #ifdef __APPLE__
+            os_signpost_interval_end(signpost_logger, detailed_signpost_id, "Processing complete");
+            #endif
+            #ifdef __APPLE__
+            os_signpost_interval_begin(signpost_logger, detailed_signpost_id, "Building waveforms");
+            #endif
             for (int i = 0; i < NUM_KCU; i++) {
                 wbs[i]->build(lb->get_completed(i));
             }
+            #ifdef __APPLE__
+            os_signpost_interval_end(signpost_logger, detailed_signpost_id, "Building waveforms");
+            #endif
         }
         // Heartbeat reset
         if (ret == 2) {
@@ -57,32 +95,57 @@ void test_line_builder(int run_number) {
                 heartbeat_counter = 0;
             }
         }
+        #ifdef __APPLE__
+        os_signpost_interval_begin(signpost_logger, detailed_signpost_id, "Reading packet");
+        #endif
         ret = fs->read_packet(buffer);
+        #ifdef __APPLE__
+        os_signpost_interval_end(signpost_logger, detailed_signpost_id, "Reading packet");
+        #endif
     }
     std::cout << "\n\n";
+
+    #ifdef __APPLE__
+    os_signpost_interval_end(signpost_logger, signpost_id, "Reading packets");
+    #endif
 
     // Unwrap counters;
     for (auto wb : wbs) {
         wb->unwrap_counters();
     }
 
+    #ifdef __APPLE__
+    os_signpost_interval_begin(signpost_logger, signpost_id, "Getting_complete");
+    #endif
     std::list<kcu_event*> *single_kcu_events[NUM_KCU];
     for (int i = 0; i < NUM_KCU; i++) {
         single_kcu_events[i] = wbs[i]->get_complete();
         // std::cout << "KCU " << i << " has " << single_kcu_events[i]->size() << " events" << std::endl;
 
     }
-
+    #ifdef __APPLE__
+    os_signpost_interval_end(signpost_logger, signpost_id, "Getting_complete");
+    #endif
 
     event_aligner *aligner = nullptr;
     if (align) {
         // std::cout << "done building waveforms, aligning..." << std::endl;
-
+        
+        #ifdef __APPLE__
+        os_signpost_interval_begin(signpost_logger, signpost_id, "Aligning events");
+        #endif
         aligner = new event_aligner(NUM_KCU);
         aligner->align(single_kcu_events);
 
         auto complete = aligner->get_complete();
+        #ifdef __APPLE__
+        os_signpost_interval_end(signpost_logger, signpost_id, "Aligning events");
+        #endif
+
         // std::cout << "Aligned events: " << complete->size() << std::endl;
+        #ifdef __APPLE__
+        os_signpost_interval_begin(signpost_logger, signpost_id, "Writing events");
+        #endif
         char out_file_name[100];
         snprintf(out_file_name, 100, "%s/run%03d.root", output_path, run_number);
         auto writer = new event_writer(out_file_name);
@@ -90,7 +153,14 @@ void test_line_builder(int run_number) {
             writer->write_event(e);
         }
         delete writer;
+        #ifdef __APPLE__
+        os_signpost_interval_end(signpost_logger, signpost_id, "Writing events");
+        #endif
     }
+
+    #ifdef __APPLE__
+    os_signpost_interval_begin(signpost_logger, signpost_id, "Writing stats and cleanup");
+    #endif
     
     // Populate stat logger
     logger->set_run_number(run_number);
@@ -138,6 +208,10 @@ void test_line_builder(int run_number) {
     std::ofstream out_file(out_file_name);
     logger->write_stats(out_file);
     out_file.close();
+    delete logger;
+    #ifdef __APPLE__
+    os_signpost_interval_end(signpost_logger, signpost_id, "Writing stats and cleanup");
+    #endif
 }
 
 std::list<aligned_event*> *run_event_builder(char *file_name) {

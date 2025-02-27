@@ -206,8 +206,8 @@ bool line_builder::process_complete() {
                 // Now we have each channel, we can decode the ADC value out of it
                 // [Tc] [Tp][10b ADC][10b TOT] [10b TOA] (case 4 from the data sheet);
                 s->adc[ch] = (ls->lines[i]->package[j] >> 20) & 0x3FF;
-                s->toa[ch] = (ls->lines[i]->package[j] >> 10) & 0x3FF;
-                s->tot[ch] = ls->lines[i]->package[j] & 0x3FF;
+                s->tot[ch] = (ls->lines[i]->package[j] >> 10) & 0x3FF;
+                s->toa[ch] = ls->lines[i]->package[j] & 0x3FF;
     
                 // TOT Decoder
                 // TOT is a 12 bit counter, but gets sent as a 10 bit number
