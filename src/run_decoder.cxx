@@ -12,12 +12,21 @@
 
 #include <string>
 #include <vector>
+#include <csignal>
+
+
+// catch ctrl-c
+bool stop = false;
+void signal_handler(int signal) {
+    stop = true;
+}
 
 void test_line_builder(int run_number) {
+    signal(SIGINT, signal_handler);
     bool align = true;
     bool spectra = false;
     const int NUM_KCU = 4;
-    const int NUM_SAMPLES = 20;
+    int NUM_SAMPLES = 20;
     char file_name[100];
     const char* data_path = std::getenv("DATA_PATH");
     const char* output_path = std::getenv("OUTPUT_PATH");
@@ -45,22 +54,33 @@ void test_line_builder(int run_number) {
     // snprintf(file_name, 100, "Run%03d.h2g", 304);
     // snprintf(file_name, 100, "/Users/tristan/epic/eeemcal/SiPM_tests/ijclab/pedscan_configs/runs/Run%03d.h2g", run_number);
     auto fs = new file_stream(file_name, NUM_KCU);
+    NUM_SAMPLES = fs->get_number_samples();
     auto lb = new line_builder(NUM_KCU);
     std::vector<waveform_builder*> wbs;
     
     #ifdef __APPLE__
     os_signpost_interval_begin(signpost_logger, signpost_id, "Reading packets");
     #endif
-
-
+    
+    
     for (int i = 0; i < NUM_KCU; i++) {
         wbs.push_back(new waveform_builder(i, NUM_SAMPLES));
     }
+    
+    event_aligner *aligner = nullptr;
+    if (align) {
+        aligner = new event_aligner(NUM_KCU);
+    }
+    char out_file_name[100];
+    snprintf(out_file_name, 100, "%s/run%03d.root", output_path, run_number);
+    auto writer = new event_writer(out_file_name, NUM_KCU, NUM_SAMPLES, 2);
+
     uint8_t buffer[1452];
     int ret = fs->read_packet(buffer);
     int heartbeat_counter = 0;
     int heartbeat_resets = 0;
-    while (ret) {
+    int iterations_since_last_complete = 0;
+    while (ret && !stop) {
         if (ret == 1) {
             heartbeat_counter = 0;
             #ifdef __APPLE__
@@ -82,9 +102,45 @@ void test_line_builder(int run_number) {
             #endif
             for (int i = 0; i < NUM_KCU; i++) {
                 wbs[i]->build(lb->get_completed(i));
+                wbs[i]->unwrap_counters();
             }
-            #ifdef __APPLE__
             os_signpost_interval_end(signpost_logger, detailed_signpost_id, "Building waveforms");
+            
+            #ifdef __APPLE__
+            os_signpost_interval_end(signpost_logger, signpost_id, "Aligning events");
+            #endif
+    
+            std::list<kcu_event*> *single_kcu_events[NUM_KCU];
+            for (int i = 0; i < NUM_KCU; i++) {
+                single_kcu_events[i] = wbs[i]->get_complete();
+                // std::cout << "KCU " << i << " has " << single_kcu_events[i]->size() << " events" << std::endl;
+            }
+            aligner->align(single_kcu_events);
+            auto complete = aligner->get_complete();
+            // std::cout << "Aligned events: " << complete->size() << std::endl;
+            if (complete->size() > 0) {
+                iterations_since_last_complete = 0;
+            } else {
+                iterations_since_last_complete++;
+            }
+            if (iterations_since_last_complete > 100000) {
+                std::cout << "No complete events for 100,000 iterations, breaking" << std::endl;
+                break;
+            }
+            for (auto e : *complete) {
+                writer->write_event(e);
+                delete e;
+            }
+            aligner->clear_complete();
+
+
+            // std::cout << "Aligned events: " << complete->size() << std::endl;
+            #ifdef __APPLE__
+            os_signpost_interval_begin(signpost_logger, signpost_id, "Writing events");
+            #endif
+            
+
+            #ifdef __APPLE__
             #endif
         }
         // Heartbeat reset
@@ -103,55 +159,37 @@ void test_line_builder(int run_number) {
         os_signpost_interval_end(signpost_logger, detailed_signpost_id, "Reading packet");
         #endif
     }
-    std::cout << "\n\n";
+    std::cout << "\n\nMade it here!" << std::endl;
+    
 
     #ifdef __APPLE__
     os_signpost_interval_end(signpost_logger, signpost_id, "Reading packets");
     #endif
 
-    // Unwrap counters;
-    for (auto wb : wbs) {
-        wb->unwrap_counters();
-    }
 
     #ifdef __APPLE__
     os_signpost_interval_begin(signpost_logger, signpost_id, "Getting_complete");
     #endif
-    std::list<kcu_event*> *single_kcu_events[NUM_KCU];
-    for (int i = 0; i < NUM_KCU; i++) {
-        single_kcu_events[i] = wbs[i]->get_complete();
-        // std::cout << "KCU " << i << " has " << single_kcu_events[i]->size() << " events" << std::endl;
+    // std::list<kcu_event*> *single_kcu_events[NUM_KCU];
+    // for (int i = 0; i < NUM_KCU; i++) {
+    //     single_kcu_events[i] = wbs[i]->get_complete();
+    //     // std::cout << "KCU " << i << " has " << single_kcu_events[i]->size() << " events" << std::endl;
+    // }
 
-    }
     #ifdef __APPLE__
     os_signpost_interval_end(signpost_logger, signpost_id, "Getting_complete");
     #endif
 
-    event_aligner *aligner = nullptr;
+    
     if (align) {
         // std::cout << "done building waveforms, aligning..." << std::endl;
         
         #ifdef __APPLE__
         os_signpost_interval_begin(signpost_logger, signpost_id, "Aligning events");
         #endif
-        aligner = new event_aligner(NUM_KCU);
-        aligner->align(single_kcu_events);
+        
+        
 
-        auto complete = aligner->get_complete();
-        #ifdef __APPLE__
-        os_signpost_interval_end(signpost_logger, signpost_id, "Aligning events");
-        #endif
-
-        // std::cout << "Aligned events: " << complete->size() << std::endl;
-        #ifdef __APPLE__
-        os_signpost_interval_begin(signpost_logger, signpost_id, "Writing events");
-        #endif
-        char out_file_name[100];
-        snprintf(out_file_name, 100, "%s/run%03d.root", output_path, run_number);
-        auto writer = new event_writer(out_file_name);
-        for (auto e : *complete) {
-            writer->write_event(e);
-        }
         delete writer;
         #ifdef __APPLE__
         os_signpost_interval_end(signpost_logger, signpost_id, "Writing events");
@@ -204,8 +242,8 @@ void test_line_builder(int run_number) {
         delete aligner;
     }
 
-    std::string out_file_name = std::string(output_path) + "/run" + std::to_string(run_number) + ".stats";
-    std::ofstream out_file(out_file_name);
+    std::string out_file_name_stats = std::string(output_path) + "/run" + std::to_string(run_number) + ".stats";
+    std::ofstream out_file(out_file_name_stats);
     logger->write_stats(out_file);
     out_file.close();
     delete logger;

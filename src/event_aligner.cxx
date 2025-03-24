@@ -16,9 +16,10 @@ aligned_event::aligned_event(uint32_t num_fpga, uint32_t channels_per_fpga) {
 
 aligned_event::~aligned_event() {
     delete[] timestamp;
-    // for (int i = 0; i < num_fpga; i++) {
-    //     delete events[i];
-    // }
+    for (int i = 0; i < num_fpga; i++) {
+        // std::cout << events[i] << std::endl;
+        // delete events[i];
+    }
     delete[] events;
 }
 
@@ -50,6 +51,10 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
     std::vector<long> last_good_timestamp;
 
     for (uint32_t i = 0; i < num_fpga; i++) {
+        if (single_kcu_events[i]->size() == 0) {
+            done = true;
+            continue;
+        }
         iters.push_back(single_kcu_events[i]->begin());
         if (iters.back() == single_kcu_events[i]->end()) {
             done = true;
@@ -108,11 +113,11 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
             // std::cout << "made new event" << std::endl;
             // Build a new aligned event
             aligned_event *ae = new aligned_event(num_fpga, 144);   // Number of channels is hardcoded for now
-            ae->events = new kcu_event*[num_fpga];
             // std::cout << "Event counters: ";
             for (uint32_t i = 0; i < num_fpga; i++) {
                 // std::cout << "FPGA " << i << ": " << (*iters[i])->get_event_counter() << "\t";
                 ae->events[i] = *iters[i];
+                (*iters[i])->is_aligned();
                 ae->timestamp[i] = (*iters[i])->get_timestamp();
                 iters[i]++;
                 last_good_timestamp[i] = (*iters[i])->get_timestamp();

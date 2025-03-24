@@ -19,7 +19,10 @@ kcu_event::kcu_event(uint32_t fpga, uint32_t samples) {
         adc[i] = new uint32_t[samples];
         toa[i] = new uint32_t[samples];
         tot[i] = new uint32_t[samples];
+        hamming[i] = new uint32_t[samples];
     }
+    unwrapped = false;
+    aligned = false;
 }
 
 kcu_event::~kcu_event() {
@@ -44,6 +47,7 @@ kcu_event::~kcu_event() {
         delete[] adc[i];
         delete[] toa[i];
         delete[] tot[i];
+        delete[] hamming[i];
     }
 }
 
@@ -76,6 +80,11 @@ waveform_builder::waveform_builder(uint32_t fpga_id, uint32_t num_samples) {
     aborted = 0;
     completed = 0;
 
+    unwrap_last_timestamp = 0;
+    unwrap_wrap_counter = 0;
+    unwrap_last_event_number = 0;
+    unwrap_event_wrap_counter = 0;
+
     in_progress = new std::list<kcu_event*>();
     complete = new std::list<kcu_event*>();
 }
@@ -87,7 +96,7 @@ waveform_builder::~waveform_builder() {
     }
     delete in_progress;
 
-    uint32_t in_order = get_num_in_order();
+    // uint32_t in_order = get_num_in_order();
 
     for (auto e : *complete) {
         delete e;
@@ -122,6 +131,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                         (*event)->adc[j + offset][i] = s->adc[j];
                         (*event)->toa[j + offset][i] = s->toa[j];
                         (*event)->tot[j + offset][i] = s->tot[j];
+                        (*event)->hamming[j + offset][i] = s->hamming_code; // check this when you're not so tired
                     }
                     found = true;
                     if (offset == 72) {
@@ -164,6 +174,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                             (*event)->adc[k + offset][j] = (*event)->adc[k + offset][j - 1];
                             (*event)->toa[k + offset][j] = (*event)->toa[k + offset][j - 1];
                             (*event)->tot[k + offset][j] = (*event)->tot[k + offset][j - 1];
+                            (*event)->hamming[k + offset][j] = (*event)->hamming[k + offset][j - 1];
                         }
                         (*event)->timestamp[j] = (*event)->timestamp[j - 1];
                         (*event)->bunch_counter[j] = (*event)->bunch_counter[j - 1];
@@ -176,6 +187,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                     (*event)->adc[j + offset][0] = s->adc[j];
                     (*event)->toa[j + offset][0] = s->toa[j];
                     (*event)->tot[j + offset][0] = s->tot[j];
+                    (*event)->hamming[j + offset][0] = s->hamming_code;
                 }
                 (*event)->timestamp[0] = s->timestamp;
                 if (offset == 72) {
@@ -199,6 +211,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                     (*event)->adc[j + offset][(*event)->found] = s->adc[j];
                     (*event)->toa[j + offset][(*event)->found] = s->toa[j];
                     (*event)->tot[j + offset][(*event)->found] = s->tot[j];
+                    (*event)->hamming[j + offset][(*event)->found] = s->hamming_code;
                 }
                 
                 (*event)->timestamp[(*event)->found] = s->timestamp;
@@ -213,10 +226,10 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                 found = true;
                 break;
             }
+            // If it is later in the sample, we will shuffle the found sample to later in the list so it is found again
             if (s->timestamp - (*event)->timestamp[(*event)->found - 1] <= 41 * (num_samples - (*event)->found)) {
                 // std::cout << "FOUND ONE LATER IN SERIES!!" << std::endl;
                 // std::cout << "Adding to end of series for kcu " << this->fpga_id << std::endl;
-                // If it is later in the sample, we will shuffle the found sample to later in the list so it is found again
                 samples->push_back(s);
                 sample_itr = samples->erase(sample_itr);
                 skip = true;
@@ -233,6 +246,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                 event->adc[j + offset][0] = s->adc[j];
                 event->toa[j + offset][0] = s->toa[j];
                 event->tot[j + offset][0] = s->tot[j];
+                event->hamming[j + offset][0] = s->hamming_code;
             }
             event->timestamp[0] = s->timestamp;
             if (offset == 72) {
@@ -243,9 +257,11 @@ bool waveform_builder::build(std::list<sample*> *samples) {
             event->found = 1;
             event->added = 1;
             in_progress->push_back(event);
+            delete s;
             sample_itr = samples->erase(sample_itr);
         }
         if (found) {
+            delete s;
             sample_itr = samples->erase(sample_itr);
         }
     }
@@ -263,22 +279,31 @@ bool waveform_builder::build(std::list<sample*> *samples) {
 }
 
 void waveform_builder::unwrap_counters() {
-    uint32_t last_timestamp = 0;
-    uint32_t wrap_counter = 0;
-    uint32_t last_event_number = 0;
-    uint32_t event_wrap_counter = 0;
+    for (auto it = complete->begin(); it != complete->end(); ) {
+        if ((*it)->aligned) {
+            auto to_delete = *it;
+            it = complete->erase(it);  // erase returns iterator to next element
+            delete to_delete;
+        } else {
+            ++it;  // Only increment if no element was removed
+        }
+    }
     for (auto e : *complete) {
-        if (e->event_counter[0] < last_event_number) {
-            event_wrap_counter++;
+        if (e->unwrapped) {
+            continue;
         }
-        last_event_number = e->event_counter[0];
-        e->unwrapped_event_number = e->event_counter[0] + (1<<6) * event_wrap_counter;
-        if (e->timestamp[0] < last_timestamp) {
+        e->unwrapped = true;
+        if (e->event_counter[0] < unwrap_last_event_number) {
+            unwrap_event_wrap_counter++;
+        }
+        unwrap_last_event_number = e->event_counter[0];
+        e->unwrapped_event_number = e->event_counter[0] + (1<<6) * unwrap_event_wrap_counter;
+        if (e->timestamp[0] < unwrap_last_timestamp) {
             // std::cout << "WRAP AROUND!!" << std::endl;
-            wrap_counter++;
+            unwrap_wrap_counter++;
         }
-        last_timestamp = e->timestamp[0];
-        e->unwrapped_timestamp = e->timestamp[0] + (1<<30) * wrap_counter;
+        unwrap_last_timestamp = e->timestamp[0];
+        e->unwrapped_timestamp = e->timestamp[0] + (1<<30) * unwrap_wrap_counter;
     }
 }
 

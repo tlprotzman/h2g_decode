@@ -1,5 +1,8 @@
 #include "file_stream.h"
 
+#include <istream>
+#include <sstream>
+
 file_stream::file_stream(const char *fname, uint32_t num_fpgas) {
     this->num_fpgas = num_fpgas;
 
@@ -11,9 +14,24 @@ file_stream::file_stream(const char *fname, uint32_t num_fpgas) {
     }
     // read file until newline is found
     char c;
-    // skip the first 21 lines... sigh.  this should be better
-    for (int i = 0; i < 21; i++) {
-        while (file.get(c) && c != '\n');
+    // Read until '##################################################' is found twice
+    std::string line;
+    int hashline_count = 0;
+    while (hashline_count < 2 && std::getline(file, line)) {
+        if (line.find("# Generator Setting machine_gun:") != std::string::npos) {
+            std::istringstream iss(line);
+            std::string token;
+            while (std::getline(iss, token, ' ')) {
+                if (token.find("machine_gun:") != std::string::npos) {
+                    std::getline(iss, token, ' ');
+                    number_samples = std::stoi(token) + 1;
+                    std::cout << "Number of samples: " << number_samples << std::endl;
+                }
+            }
+        }
+        if (line.find("##################################################") != std::string::npos) {
+            hashline_count++;
+        }
     }
     current_head = file.tellg();
     // std::cout << "FILE STREAM: Starting at byte " << current_head << std::endl;
@@ -45,10 +63,10 @@ int file_stream::read_packet(uint8_t *buffer) {
     file.read(reinterpret_cast<char*>(buffer), packet_size);;
     current_head = file.tellg();
 
-    if ((float)current_head / (float)end > current_percent + 0.00005) {
+    if ((float)current_head / (float)end > current_percent + 0.0001) {
         current_percent = (float)current_head / (float)end;
-        std::cout << "\nFILE STREAM: " << 100 * (float) current_head / (float)end << "\% complete              ";
-        std::cout << std::flush;
+        std::cout << "\rFILE STREAM: " << (int)(100 * (float) current_head / (float)end) << "\% complete              ";
+        // std::cout << std::flush;
     }
 
     // Check if the read was successful

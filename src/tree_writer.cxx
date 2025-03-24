@@ -13,9 +13,10 @@
 #include <TFile.h>
 #include <TTree.h>
 
-event_writer::event_writer(const std::string &file_name) {
-    num_kcu = 4;
-    num_samples = 20;
+event_writer::event_writer(const std::string &file_name, int num_kcu, int num_samples, int detector) {
+    this->num_kcu = num_kcu;
+    this->num_samples = num_samples;
+    this->detector = detector;
     num_channels = 144 * num_kcu;
     event_number = 0;
 
@@ -30,37 +31,70 @@ event_writer::event_writer(const std::string &file_name) {
     event_values.timestamps = new uint[num_kcu];
     tree->Branch("event_number", &event_values.event_number, "event_number/i");
     tree->Branch("timestamps", event_values.timestamps, Form("timestamps[%d]/i", num_kcu));
+    tree->Branch("num_samples", &event_values.num_samples, "num_samples/i");
 
     // Somewhat gross hack to make this a continuous block of memory so it writes to a ttree nicely
     event_values.adc_block = new uint[num_channels * num_samples];
     event_values.toa_block = new uint[num_channels * num_samples];
     event_values.tot_block = new uint[num_channels * num_samples];
+    event_values.hamming_block = new uint[num_channels * num_samples];
     memset(event_values.adc_block, 0, num_channels * num_samples * sizeof(uint));
     memset(event_values.toa_block, 0, num_channels * num_samples * sizeof(uint));
     memset(event_values.tot_block, 0, num_channels * num_samples * sizeof(uint));
+    memset(event_values.hamming_block, 0, num_channels * num_samples * sizeof(uint));
 
     event_values.samples_adc = new uint*[num_channels];
     event_values.samples_toa = new uint*[num_channels];
     event_values.samples_tot = new uint*[num_channels];
+    event_values.sample_hamming_err = new uint*[num_channels];
 
     for (int i = 0; i < num_channels; i++) {
         event_values.samples_adc[i] = event_values.adc_block + i * num_samples;
         event_values.samples_toa[i] = event_values.toa_block + i * num_samples;
         event_values.samples_tot[i] = event_values.tot_block + i * num_samples;
+        event_values.sample_hamming_err[i] = event_values.hamming_block + i * num_samples;
     }
 
     tree->Branch("adc", event_values.adc_block, Form("adc[%d][%d]/i", num_channels, num_samples));
     tree->Branch("toa", event_values.toa_block, Form("toa[%d][%d]/i", num_channels, num_samples));
     tree->Branch("tot", event_values.tot_block, Form("tot[%d][%d]/i", num_channels, num_samples));
+    tree->Branch("hamming", event_values.hamming_block, Form("hamming[%d][%d]/i", num_channels, num_samples));
 
     event_values.hit_x = new uint[num_channels];
     event_values.hit_y = new uint[num_channels];
     event_values.hit_z = new uint[num_channels];
+    event_values.hit_crystal = new uint[num_channels];
+    event_values.hit_sipm_16i = new uint[num_channels];
+    event_values.hit_sipm_4x4 = new uint[num_channels];
+    event_values.hit_sipm_16p = new uint[num_channels];
     event_values.good_channel = new bool[num_channels];
-    tree->Branch("hit_x", event_values.hit_x, Form("hit_x[%d]/i", num_channels));
-    tree->Branch("hit_y", event_values.hit_y, Form("hit_y[%d]/i", num_channels));
-    tree->Branch("hit_z", event_values.hit_z, Form("hit_z[%d]/i", num_channels));
-    tree->Branch("good_channel", event_values.good_channel, Form("good_channel[%d]/O", num_channels));
+    event_values.good_channel_16i = new bool[num_channels];
+    event_values.good_channel_4x4 = new bool[num_channels];
+    event_values.good_channel_16p = new bool[num_channels];
+    for (int i = 0; i < num_channels; i++) {
+            event_values.good_channel[i] = false;
+            event_values.good_channel_16i[i] = false;
+            event_values.good_channel_4x4[i] = false;
+            event_values.good_channel_16p[i] = false;
+    }
+    if (detector == 1) {
+        tree->Branch("hit_x", event_values.hit_x, Form("hit_x[%d]/i", num_channels));
+        tree->Branch("hit_y", event_values.hit_y, Form("hit_y[%d]/i", num_channels));
+        tree->Branch("hit_z", event_values.hit_z, Form("hit_z[%d]/i", num_channels));
+    } else if (detector == 2) {
+        tree->Branch("hit_crystal", event_values.hit_crystal, Form("hit_crystal[%d]/i", num_channels));
+        tree->Branch("hit_sipm_16i", event_values.hit_sipm_16i, Form("hit_sipm_16i[%d]/i", num_channels));
+        tree->Branch("hit_sipm_4x4", event_values.hit_sipm_4x4, Form("hit_sipm_4x4[%d]/i", num_channels));
+        tree->Branch("hit_sipm_16p", event_values.hit_sipm_16p, Form("hit_sipm_16p[%d]/i", num_channels));
+    }
+    if (detector == 1) {
+        tree->Branch("good_channel", event_values.good_channel, Form("good_channel[%d]/O", num_channels));
+    } else if (detector == 2) {
+        tree->Branch("good_channel_16i", event_values.good_channel_16i, Form("good_channel_16i[%d]/O", num_channels));
+        tree->Branch("good_channel_4x4", event_values.good_channel_4x4, Form("good_channel_4x4[%d]/O", num_channels));
+        tree->Branch("good_channel_16p", event_values.good_channel_16p, Form("good_channel_16p[%d]/O", num_channels));
+    }
+
 
     event_values.hit_max = new uint[num_channels];
     event_values.hit_pedestal = new uint[num_channels];
@@ -129,30 +163,84 @@ bool event_writer::decode_position(int channel, int &x, int &y, int &z) {
 }
 
 void event_writer::write_event(aligned_event *event) {
+    // std::cout << "event: " << event << std::endl;
+    // std::cout << "0: " << event->get_event(0) << std::endl;
+    // std::cout << "1: " << event->get_event(1) << std::endl;
+    // std::cout << "2: " << event->get_event(2) << std::endl;
+    // std::cout << "3: " << event->get_event(3) << std::endl;
     event_values.event_number = event_number;
+    event_values.num_samples = num_samples;
     event_number++;
-    for (int i = 0; i < num_kcu; i++) {
-        auto e = event->get_event(i);
-        event_values.timestamps[i] = e->get_timestamp();
-        // hitwise quantities
-        for (int j = 0; j < 144; j++) {
-            int channel_index = i * 144 + j;
-            auto x = 0, y = 0, z = 0;
-            // Correct Z for which KCU is used
-            bool good = decode_position(channel_index, x, y, z);
-            event_values.hit_x[channel_index] = x;
-            event_values.hit_y[channel_index] = y;
-            event_values.hit_z[channel_index] = z;
-            event_values.good_channel[channel_index] = good;
-            event_values.hit_max[channel_index] = 0;
-            event_values.hit_pedestal[channel_index] = e->get_sample_adc(j, 0);
-            for (int k = 0; k < num_samples; k++) {
-                event_values.samples_adc[channel_index][k] = e->get_sample_adc(j, k);
-                if (event_values.samples_adc[channel_index][k] > event_values.hit_max[channel_index]) {
-                    event_values.hit_max[channel_index] = event_values.samples_adc[channel_index][k];
+    if (detector == 1) {
+        for (int i = 0; i < num_kcu; i++) {
+            auto e = event->get_event(i);
+            event_values.timestamps[i] = e->get_timestamp();
+            // hitwise quantities
+            for (int j = 0; j < 144; j++) {
+                int channel_index = i * 144 + j;
+                auto x = 0, y = 0, z = 0;
+                // Correct Z for which KCU is used
+                bool good = decode_position(channel_index, x, y, z);
+                event_values.hit_x[channel_index] = x;
+                event_values.hit_y[channel_index] = y;
+                event_values.hit_z[channel_index] = z;
+                event_values.good_channel[channel_index] = good;
+                event_values.hit_max[channel_index] = 0;
+                event_values.hit_pedestal[channel_index] = e->get_sample_adc(j, 0);
+                for (int k = 0; k < num_samples; k++) {
+                    event_values.samples_adc[channel_index][k] = e->get_sample_adc(j, k);
+                    if (event_values.samples_adc[channel_index][k] > event_values.hit_max[channel_index]) {
+                        event_values.hit_max[channel_index] = event_values.samples_adc[channel_index][k];
+                    }
+                    event_values.samples_toa[channel_index][k] = e->get_sample_toa(j, k);
+                    event_values.samples_tot[channel_index][k] = e->get_sample_tot(j, k);
+                    event_values.sample_hamming_err[channel_index][k] = e->get_sample_hamming(j, k);
                 }
-                event_values.samples_toa[channel_index][k] = e->get_sample_toa(j, k);
-                event_values.samples_tot[channel_index][k] = e->get_sample_tot(j, k);
+            }
+        }
+    } else if (detector == 2) {
+        for (int crystal = 0; crystal < 25; crystal++) {
+            for (int sipm = 0; sipm < 16; sipm++) {
+                int fpga = eeemcal_fpga_map[crystal];
+                int asic = eeemcal_asic_map[crystal];
+                int connector = eeemcal_connector_map[crystal];
+                int channel_16i_index = 0;
+                int channel_4x4_index = 0;
+                int channel_16p_index = 0;
+                event_values.hit_crystal[channel_16i_index] = crystal;
+
+                if (sipm == 0) {
+                    channel_16p_index = fpga * 144 + asic * 72 + eeemcal_16p_channel_map[connector];
+                    event_values.good_channel_16p[channel_16p_index] = true;
+                    event_values.hit_sipm_16p[channel_16i_index] = sipm;
+                }
+                if (sipm < 4) {
+                    channel_4x4_index = fpga * 144 + asic * 72 + eeemcal_4x4_channel_map[connector][sipm];
+                    event_values.good_channel_4x4[channel_4x4_index] = true;
+                    event_values.hit_sipm_4x4[channel_16i_index] = sipm;
+                }
+                channel_16i_index = fpga * 144 + asic * 72 + eeemcal_16i_channel_map[connector][sipm];
+                event_values.good_channel_16i[channel_16i_index] = true;
+                event_values.hit_sipm_16i[channel_16i_index] = sipm;
+                
+            }
+        }
+        for (int i = 0; i < num_kcu; i++) {
+            auto e = event->get_event(i);
+            event_values.timestamps[i] = e->get_timestamp();
+            for (int j = 0; j < 144; j++) {
+                int channel_index = i * 144 + j;
+                event_values.hit_max[channel_index] = 0;
+                event_values.hit_pedestal[channel_index] = e->get_sample_adc(j, 0);
+                for (int k = 0; k < num_samples; k++) {
+                    event_values.samples_adc[channel_index][k] = e->get_sample_adc(j, k);
+                    if (event_values.samples_adc[channel_index][k] > event_values.hit_max[channel_index]) {
+                        event_values.hit_max[channel_index] = event_values.samples_adc[channel_index][k];
+                    }
+                    event_values.samples_toa[channel_index][k] = e->get_sample_toa(j, k);
+                    event_values.samples_tot[channel_index][k] = e->get_sample_tot(j, k);
+                    event_values.sample_hamming_err[channel_index][k] = e->get_sample_hamming(j, k);
+                }
             }
         }
     }

@@ -38,4 +38,5 @@ public:
     ~event_aligner();
     bool align(std::list<kcu_event*> **single_kcu_events);
     std::list<aligned_event*> *get_complete() {return complete;}
+    void clear_complete() {complete->clear();}
 };

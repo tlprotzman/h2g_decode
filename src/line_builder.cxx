@@ -192,9 +192,30 @@ bool line_builder::process_complete() {
         s->orbit_counter = (header >> 7) & 0b111;
         s->hamming_code = (header >> 4) & 0b111;
 
+        int slipped = 0;
+
+        uint header_start_alignment = header >> 28;
+        uint header_end_aligment = header & 0b1111;
+        if (header_start_alignment != 0b0101) {
+            slipped++;
+            // std::cerr << "Start eader out of alignment! Got " << header_start_alignment << std::endl;
+        }
+        if (header_end_aligment != 0b0101) {
+            slipped++;
+            // std::cerr << "End header out of alignment! Got " << header_end_aligment << std::endl;
+        }
+        // if (slipped == 1) {
+        //     std::cout << "Only one header slipped..." << std::endl;
+        // } else if (slipped == 2) {
+        //     std::cout << "Both headers slipped" << std::endl;
+        // }
+
+        // auto idle = ls->lines[4][] // never mind, we don't get the idle packet... 
+
         auto cm = ls->lines[0]->package[1];
         auto calib = ls->lines[2]->package[4];
         auto crc = ls->lines[4]->package[7];
+        // std::cout << "crc is " << crc << std::endl;
 
         int ch = 0;
         for (int i = 0; i < 5; i++) {
@@ -205,6 +226,7 @@ bool line_builder::process_complete() {
                 }
                 // Now we have each channel, we can decode the ADC value out of it
                 // [Tc] [Tp][10b ADC][10b TOT] [10b TOA] (case 4 from the data sheet);
+                // Another way to check for bit slip could be to check Tc and Tp..
                 s->adc[ch] = (ls->lines[i]->package[j] >> 20) & 0x3FF;
                 s->tot[ch] = (ls->lines[i]->package[j] >> 10) & 0x3FF;
                 s->toa[ch] = ls->lines[i]->package[j] & 0x3FF;
@@ -220,7 +242,13 @@ bool line_builder::process_complete() {
                 ch++;
             }
         }
-        samples->at(s->fpga)->push_back(s);
+        // if (slipped == 0) {
+            samples->at(s->fpga)->push_back(s);  // What happens if we don't use sampels where stuff slipped?
+        // }
+        for (int i = 0; i < 5; i++) {
+            delete ls->lines[i];
+        }
+        delete ls;
     }
     events_completed += complete->size();
     complete->clear();
