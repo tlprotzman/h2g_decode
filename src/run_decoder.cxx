@@ -104,7 +104,9 @@ void test_line_builder(int run_number) {
                 wbs[i]->build(lb->get_completed(i));
                 wbs[i]->unwrap_counters();
             }
+            #ifdef __APPLE__
             os_signpost_interval_end(signpost_logger, detailed_signpost_id, "Building waveforms");
+            #endif
             
             #ifdef __APPLE__
             os_signpost_interval_end(signpost_logger, signpost_id, "Aligning events");
