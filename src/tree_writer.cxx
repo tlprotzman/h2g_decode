@@ -19,6 +19,7 @@ event_writer::event_writer(const std::string &file_name, int num_kcu, int num_sa
     this->detector = detector;
     num_channels = 144 * num_kcu;
     event_number = 0;
+    std::cout << "detector is " << detector << std::endl;
 
     // std::cout << "making event writer with " << num_kcu << " KCUs, " << num_samples << " samples, and " << num_channels << " channels" << std::endl;
 
@@ -171,7 +172,28 @@ void event_writer::write_event(aligned_event *event) {
     event_values.event_number = event_number;
     event_values.num_samples = num_samples;
     event_number++;
-    if (detector == 1) {
+    if (detector == 0) { // just write values, don't match to geometry or anything fancy
+        for (int i = 0; i < num_kcu; i++) {
+            auto e = event->get_event(i);
+            event_values.timestamps[i] = e->get_timestamp();
+            // hitwise quantities
+            for (int j = 0; j < 144; j++) {
+                int channel_index = i * 144 + j;
+                event_values.hit_max[channel_index] = 0;
+                event_values.hit_pedestal[channel_index] = e->get_sample_adc(j, 0);
+                for (int k = 0; k < num_samples; k++) {
+                    event_values.samples_adc[channel_index][k] = e->get_sample_adc(j, k);
+                    if (event_values.samples_adc[channel_index][k] > event_values.hit_max[channel_index]) {
+                        event_values.hit_max[channel_index] = event_values.samples_adc[channel_index][k];
+                    }
+                    event_values.samples_toa[channel_index][k] = e->get_sample_toa(j, k);
+                    event_values.samples_tot[channel_index][k] = e->get_sample_tot(j, k);
+                    event_values.sample_hamming_err[channel_index][k] = e->get_sample_hamming(j, k);
+                }
+            }
+        }
+    }
+    else if (detector == 1) {
         for (int i = 0; i < num_kcu; i++) {
             auto e = event->get_event(i);
             event_values.timestamps[i] = e->get_timestamp();

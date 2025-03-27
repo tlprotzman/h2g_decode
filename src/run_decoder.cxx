@@ -25,7 +25,8 @@ void test_line_builder(int run_number) {
     signal(SIGINT, signal_handler);
     bool align = true;
     bool spectra = false;
-    const int NUM_KCU = 4;
+    const int NUM_KCU = 1;
+    const int DETECTOR_ID = 0; // 0: generic, 1: LFHCal, 2: EEEMCal
     int NUM_SAMPLES = 20;
     char file_name[100];
     const char* data_path = std::getenv("DATA_PATH");
@@ -73,7 +74,7 @@ void test_line_builder(int run_number) {
     }
     char out_file_name[100];
     snprintf(out_file_name, 100, "%s/run%03d.root", output_path, run_number);
-    auto writer = new event_writer(out_file_name, NUM_KCU, NUM_SAMPLES, 2);
+    auto writer = new event_writer(out_file_name, NUM_KCU, NUM_SAMPLES, DETECTOR_ID);
 
     uint8_t buffer[1452];
     int ret = fs->read_packet(buffer);
@@ -115,7 +116,6 @@ void test_line_builder(int run_number) {
             std::list<kcu_event*> *single_kcu_events[NUM_KCU];
             for (int i = 0; i < NUM_KCU; i++) {
                 single_kcu_events[i] = wbs[i]->get_complete();
-                // std::cout << "KCU " << i << " has " << single_kcu_events[i]->size() << " events" << std::endl;
             }
             aligner->align(single_kcu_events);
             auto complete = aligner->get_complete();
