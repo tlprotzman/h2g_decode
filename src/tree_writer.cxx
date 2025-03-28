@@ -1,4 +1,6 @@
 #include "tree_writer.h"
+#ifdef USE_ROOT
+
 
 #include "event_aligner.h"
 #include "waveform_builder.h"
@@ -274,3 +276,5 @@ void event_writer::close() {
     file->Write();
     file->Close();
 }
+
+#endif // USE_ROOT

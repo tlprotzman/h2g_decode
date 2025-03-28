@@ -1,4 +1,5 @@
 #pragma once
+#ifdef USE_ROOT
 
 #include "event_aligner.h"
 #include "waveform_builder.h"
@@ -123,3 +124,5 @@ public:
     void write_event(aligned_event *event);
     void close();
 };
+
+#endif // USE_ROOT

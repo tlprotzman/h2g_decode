@@ -72,9 +72,11 @@ void test_line_builder(int run_number) {
     if (align) {
         aligner = new event_aligner(NUM_KCU);
     }
+    #ifdef USE_ROOT
     char out_file_name[100];
     snprintf(out_file_name, 100, "%s/run%03d.root", output_path, run_number);
     auto writer = new event_writer(out_file_name, NUM_KCU, NUM_SAMPLES, DETECTOR_ID);
+    #endif // USE_ROOT
 
     uint8_t buffer[1452];
     int ret = fs->read_packet(buffer);
@@ -129,10 +131,12 @@ void test_line_builder(int run_number) {
                 std::cout << "No complete events for 100,000 iterations, breaking" << std::endl;
                 break;
             }
+            #ifdef USE_ROOT
             for (auto e : *complete) {
                 writer->write_event(e);
                 delete e;
             }
+            #endif // USE_ROOT
             aligner->clear_complete();
 
 
@@ -191,8 +195,9 @@ void test_line_builder(int run_number) {
         #endif
         
         
-
+        #ifdef USE_ROOT
         delete writer;
+        #endif // USE_ROOT
         #ifdef __APPLE__
         os_signpost_interval_end(signpost_logger, signpost_id, "Writing events");
         #endif
@@ -300,13 +305,4 @@ std::list<aligned_event*> *run_event_builder(char *file_name) {
     std::cout << "Aligned events: " << complete->size() << std::endl;
 
     return complete;
-    
-    delete fs;
-    delete lb;
-    for (auto wb : wbs) {
-        delete wb;
-    }
-    if (align) {
-        delete aligner;
-    }
 }
