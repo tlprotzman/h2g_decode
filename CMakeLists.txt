@@ -2,8 +2,11 @@ cmake_minimum_required(VERSION 3.10)
 
 # Project name
 project(h2g_decode)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(USE_ROOT on)
+
+option(USE_ROOT "Enable TTree writer" ON)
 if (USE_ROOT)
 # Find ROOT package
 find_package(ROOT)

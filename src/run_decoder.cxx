@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 #include <csignal>
-
+#include <cassert>
 
 // catch ctrl-c
 bool stop = false;
