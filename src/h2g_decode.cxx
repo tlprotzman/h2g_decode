@@ -12,18 +12,18 @@ tlprotzman@gmail.com
 #include "waveform_builder.h"
 #include "event_aligner.h"
 #include "tree_writer.h"
-#include "run_decoder.h"
+#include "hgc_decoder.h"
 
 #include <string>
 #include <vector>
 
 int main(int argc, char **argv) {
-    if (argc != 2) {
-        std::cout << "Usage: h2g_decode <run_number>" << std::endl;
-        return 1;
-    }
-    int run_number = std::stoi(argv[1]);
-    test_line_builder(run_number);
+    // if (argc != 2) {
+        // std::cout << "Usage: h2g_decode <run_number>" << std::endl;
+        // return 1;
+    // }
+    // int run_number = std::stoi(argv[1]);
+    test_line_builder();
     return 0;
 
     // run_event_builder(argv[1]);
