@@ -6,6 +6,7 @@
 #include "event_aligner.h"
 #include "tree_writer.h"
 #include "stat_logger.h"
+#include "debug_logger.h"
 
 // For debugging/profiling
 #ifdef __APPLE__
@@ -16,7 +17,16 @@
 #include <list>
 #include <string>
 
-void test_line_builder();
+struct config {
+    int run_number;
+    int detector_id;
+    int num_kcu;
+    std::string file_name;
+    std::string output_file_name;
+    int debug_level;
+};
+
+void test_line_builder(config &cfg);
 std::list<aligned_event*> *run_event_builder(char *file_name);
 
 class hgc_decoder {
@@ -26,6 +36,7 @@ class hgc_decoder {
         const int NUM_KCU;
         const int DETECTOR_ID;
         int NUM_SAMPLES;
+        int debug_level;
 
         // decoder modules
         stat_logger *logger;
@@ -51,8 +62,9 @@ class hgc_decoder {
         bool get_next_events();
 
     public:
-        hgc_decoder(const char *file_name, const int detector_id, const int num_kcu);
+        hgc_decoder(const char *file_name, const int detector_id, const int num_kcu, const int debug_level = 0);
         ~hgc_decoder();
+        int get_num_samples() {return NUM_SAMPLES;};
 
         class iterator {
             friend class hgc_decoder;

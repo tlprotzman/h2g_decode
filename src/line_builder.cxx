@@ -1,4 +1,5 @@
 #include "line_builder.h"
+#include "debug_logger.h"
 
 #include <cstdint>
 #include <list>
@@ -22,20 +23,24 @@ line_builder::line_builder(uint32_t num_fpga) {
 }
 
 line_builder::~line_builder() {
-    // auto percent_lost = (float)(in_progress->size() + events_aborted) / (float)(in_progress->size() + events_aborted + complete->size() + events_completed);
-    // percent_lost *= 100;
-    // std::cout << "LINE BUILDER: Ended with " << in_progress->size() + events_aborted << " in progress and " << complete->size() + events_completed << " complete (" << percent_lost << "\% lost)" << std::endl;
+    auto percent_lost = (float)(in_progress->size() + events_aborted) / (float)(in_progress->size() + events_aborted + complete->size() + events_completed);
+    percent_lost *= 100;
+    log_message(DEBUG_DEBUG, "LineBuilder", "Ended with " + std::to_string(in_progress->size() + events_aborted) + 
+                " in progress and " + std::to_string(complete->size() + events_completed) + 
+                " complete (" + std::to_string(percent_lost) + "% lost)");
 
-    // int mean = 0;
-    // for (int i = 0; i < 16; i++) {
-    //     mean += num_found[i];
-    // }
-    // mean /= 16;
+    int mean = 0;
+    for (int i = 0; i < 16; i++) {
+        mean += num_found[i];
+    }
+    mean /= 16;
 
-    // std::cout << "LINE BUILDER: Each device found " << std::endl;
-    // for (int i = 0; i < 16; i++) {
-    //     std::cout << "Device " << i << " found " << num_found[i] << " times (" << num_found[i] - mean << " away from mean)" << std::endl;
-    // }
+    log_message(DEBUG_DEBUG, "LineBuilder", "Each device found:");
+    for (int i = 0; i < 16; i++) {
+        log_message(DEBUG_DEBUG, "LineBuilder", "Device " + std::to_string(i) + 
+                    " found " + std::to_string(num_found[i]) + 
+                    " times (" + std::to_string(num_found[i] - mean) + " away from mean)");
+    }
     
     for (auto ls : *in_progress) {
         for (int i = 0; i < 5; i++) {
@@ -138,7 +143,9 @@ bool line_builder::process_packet(uint8_t *packet) {
             if ((*ls)->fpga == l->fpga && (*ls)->asic == l->asic && (*ls)->half == l->half && (*ls)->timestamp == l->timestamp) {
                 found = true;
                 if ((*ls)->lines[l->line_number] != nullptr) {
-                    std::cerr << "Duplicate line " << l->line_number << " for FPGA " << l->fpga << " at timestamp " << l->timestamp << std::endl;
+                    log_message(DEBUG_ERROR, "LineBuilder", "Duplicate line " + std::to_string(l->line_number) + 
+                                " for FPGA " + std::to_string(l->fpga) + 
+                                " at timestamp " + std::to_string(l->timestamp));
                     return false;
                 }
                 (*ls)->lines[l->line_number] = l;
@@ -180,7 +187,7 @@ bool line_builder::process_complete() {
         // Check if any lines are null
         for (int i = 0; i < 5; i++) {
             if (ls->lines[i] == nullptr) {
-                std::cerr << "Missing line " << i << std::endl;
+                log_message(DEBUG_ERROR, "LineBuilder", "Missing line " + std::to_string(i));
                 return false;
             }
         }
@@ -198,24 +205,24 @@ bool line_builder::process_complete() {
         uint header_end_aligment = header & 0b1111;
         if (header_start_alignment != 0b0101) {
             slipped++;
-            // std::cerr << "Start eader out of alignment! Got " << header_start_alignment << std::endl;
+            log_message(DEBUG_TRACE, "LineBuilder", "Start header out of alignment! Got " + std::to_string(header_start_alignment));
         }
         if (header_end_aligment != 0b0101) {
             slipped++;
-            // std::cerr << "End header out of alignment! Got " << header_end_aligment << std::endl;
+            log_message(DEBUG_TRACE, "LineBuilder", "End header out of alignment! Got " + std::to_string(header_end_aligment));
         }
-        // if (slipped == 1) {
-        //     std::cout << "Only one header slipped..." << std::endl;
-        // } else if (slipped == 2) {
-        //     std::cout << "Both headers slipped" << std::endl;
-        // }
+        if (slipped == 1) {
+            log_message(DEBUG_TRACE, "LineBuilder", "Only one header slipped...");
+        } else if (slipped == 2) {
+            log_message(DEBUG_TRACE, "LineBuilder", "Both headers slipped");
+        }
 
         // auto idle = ls->lines[4][] // never mind, we don't get the idle packet... 
 
         auto cm = ls->lines[0]->package[1];
         auto calib = ls->lines[2]->package[4];
         auto crc = ls->lines[4]->package[7];
-        // std::cout << "crc is " << crc << std::endl;
+        log_message(DEBUG_TRACE, "LineBuilder", "CRC is " + std::to_string(crc));
 
         int ch = 0;
         for (int i = 0; i < 5; i++) {
@@ -242,9 +249,10 @@ bool line_builder::process_complete() {
                 ch++;
             }
         }
-        // if (slipped == 0) {
-            samples->at(s->fpga)->push_back(s);  // What happens if we don't use sampels where stuff slipped?
-        // }
+        if (slipped > 0) {
+            log_message(DEBUG_TRACE, "LineBuilder", "Using sample with " + std::to_string(slipped) + " slipped headers");
+        }
+        samples->at(s->fpga)->push_back(s);
         for (int i = 0; i < 5; i++) {
             delete ls->lines[i];
         }

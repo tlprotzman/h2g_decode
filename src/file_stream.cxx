@@ -6,18 +6,28 @@
 file_stream::file_stream(const char *fname, uint32_t num_fpgas) {
     this->num_fpgas = num_fpgas;
 
-    std::cout << "Attempting to open file " << fname << std::endl;
+    log_message(DEBUG_INFO, "FileStream", "Initializing with " + std::to_string(num_fpgas) + " FPGAs");
+    log_message(DEBUG_INFO, "FileStream", "Attempting to open file " + std::string(fname));
+    
     file = std::ifstream(fname, std::ios::in | std::ios::binary);
     if (!file.good()) {
-        std::cerr << "Error opening file" << std::endl;
+        log_message(DEBUG_ERROR, "FileStream", "Error opening file " + std::string(fname));
         throw std::runtime_error("Error opening file");
     }
+    
+    log_message(DEBUG_DEBUG, "FileStream", "File opened successfully, parsing header");
+    
     // read file until newline is found
     char c;
     // Read until '##################################################' is found twice
     std::string line;
     int hashline_count = 0;
+    int lines_read = 0;
+    
     while (hashline_count < 2 && std::getline(file, line)) {
+        lines_read++;
+        log_message(DEBUG_TRACE, "FileStream", "Header line " + std::to_string(lines_read) + ": " + line);
+        
         if (line.find("# Generator Setting machine_gun:") != std::string::npos) {
             std::istringstream iss(line);
             std::string token;
@@ -25,20 +35,28 @@ file_stream::file_stream(const char *fname, uint32_t num_fpgas) {
                 if (token.find("machine_gun:") != std::string::npos) {
                     std::getline(iss, token, ' ');
                     number_samples = std::stoi(token) + 1;
-                    std::cout << "Number of samples: " << number_samples << std::endl;
+                    log_message(DEBUG_INFO, "FileStream", "Number of samples: " + std::to_string(number_samples));
                 }
             }
         }
         if (line.find("##################################################") != std::string::npos) {
             hashline_count++;
+            log_message(DEBUG_DEBUG, "FileStream", "Found delimiter line " + std::to_string(hashline_count) + "/2");
         }
     }
+    
     current_head = file.tellg();
-    // std::cout << "FILE STREAM: Starting at byte " << current_head << std::endl;
+    log_message(DEBUG_INFO, "FileStream", "Starting at byte " + std::to_string(static_cast<long long>(current_head)));
+    
     file.seekg(0, std::ios::end);
     end = file.tellg();
     file_size = end;
-    // std::cout << "FILE STREAM: File size is " << end << " bytes" << std::endl;
+    
+    log_message(DEBUG_INFO, "FileStream", "File size is " + std::to_string(static_cast<long long>(end)) + " bytes");
+    log_message(DEBUG_DEBUG, "FileStream", "Data portion is " + 
+                std::to_string(static_cast<long long>(end - current_head)) + " bytes (" + 
+                std::to_string(100.0 * (end - current_head) / end) + "% of file)");
+    
     file.seekg(current_head, std::ios::beg);
     current_percent = (int)current_head * 100 / (int)end;
     packets_processed = 0;
@@ -55,8 +73,9 @@ int file_stream::read_packet(uint8_t *buffer) {
     if (file.tellg() - current_head < packet_size) {
         file.seekg(current_head, std::ios::beg);
         bytes_remaining = file.tellg() - current_head;
-        // std::cout << "\nFILE STREAM: Reached end of file with " << file.tellg() - current_head << " bytes remaining" << std::endl;
-        // std::cout << "current head is " << current_head << std::endl;
+        log_message(DEBUG_INFO, "\nFILE STREAM: Reached end of file with " + 
+                    std::to_string(static_cast<long long>(file.tellg() - current_head)) + " bytes remaining");
+        log_message(DEBUG_INFO, "current head is " + std::to_string(static_cast<long long>(current_head)));
         return 0;   // Not enough bytes to read
     }
     file.seekg(current_head, std::ios::beg);    // Return to current point in file
@@ -65,20 +84,19 @@ int file_stream::read_packet(uint8_t *buffer) {
 
     if ((float)current_head / (float)end > current_percent + 0.0001) {
         current_percent = (float)current_head / (float)end;
-        std::cout << "\rFILE STREAM: " << (int)(100 * (float) current_head / (float)end) << "\% complete              ";
-        // std::cout << std::flush;
+        log_message(DEBUG_DEBUG, "\rFILE STREAM: " + std::to_string((int)(100 * (float) current_head / (float)end)) + "% complete");
     }
 
     // Check if the read was successful
     if (file.rdstate() & std::ifstream::failbit || file.rdstate() & std::ifstream::badbit) {
         if (std::ifstream::failbit) {
-                std::cerr << "Error reading line - failbit" << std::endl;
+                log_message(DEBUG_ERROR, "Error reading line - failbit");
         }
         if (std::ifstream::badbit) {
-                std::cerr << "Error reading line - badbit" << std::endl;
+                log_message(DEBUG_ERROR, "Error reading line - badbit");
         }
         if (std::ifstream::eofbit) {
-                std::cerr << "Error reading line - eofbit" << std::endl;
+                log_message(DEBUG_ERROR, "Error reading line - eofbit");
         }
         perror("bad read");
         return 0;
@@ -86,7 +104,7 @@ int file_stream::read_packet(uint8_t *buffer) {
     packets_processed++;
     // Check if this is a heartbeat packet
     if (buffer[0] == 0x23 && buffer[1] == 0x23 && buffer[2] == 0x23 && buffer[3] == 0x23) {
-        // std::cout << "Heartbeat packet" << std::endl;
+        log_message(DEBUG_TRACE, "FileStream", "Heartbeat packet");
         return 2;
     }
     return 1;

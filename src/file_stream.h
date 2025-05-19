@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include "debug_logger.h"
 
 class file_stream {
 private:

@@ -4,6 +4,7 @@
 
 #include "event_aligner.h"
 #include "waveform_builder.h"
+#include "debug_logger.h"
 
 #include <cstdint>
 #include <vector>
@@ -21,9 +22,11 @@ event_writer::event_writer(const std::string &file_name, int num_kcu, int num_sa
     this->detector = detector;
     num_channels = 144 * num_kcu;
     event_number = 0;
-    std::cout << "detector is " << detector << std::endl;
+    log_message(DEBUG_INFO, "TreeWriter", "Detector is " + std::to_string(detector));
 
-    // std::cout << "making event writer with " << num_kcu << " KCUs, " << num_samples << " samples, and " << num_channels << " channels" << std::endl;
+    log_message(DEBUG_DEBUG, "TreeWriter", "Making event writer with " + std::to_string(num_kcu) + 
+               " KCUs, " + std::to_string(num_samples) + " samples, and " + 
+               std::to_string(num_channels) + " channels");
 
     this->file_name = file_name;
     file = new TFile(file_name.c_str(), "RECREATE");
@@ -166,11 +169,11 @@ bool event_writer::decode_position(int channel, int &x, int &y, int &z) {
 }
 
 void event_writer::write_event(aligned_event *event) {
-    // std::cout << "event: " << event << std::endl;
-    // std::cout << "0: " << event->get_event(0) << std::endl;
-    // std::cout << "1: " << event->get_event(1) << std::endl;
-    // std::cout << "2: " << event->get_event(2) << std::endl;
-    // std::cout << "3: " << event->get_event(3) << std::endl;
+    log_message(DEBUG_TRACE, "TreeWriter", "Writing event: " + std::to_string((uint64_t)event));
+    for (int i = 0; i < num_kcu; i++) {
+        log_message(DEBUG_TRACE, "TreeWriter", std::to_string(i) + ": " + 
+                   std::to_string((uint64_t)event->get_event(i)));
+    }
     event_values.event_number = event_number;
     event_values.num_samples = num_samples;
     event_number++;
@@ -270,9 +273,11 @@ void event_writer::write_event(aligned_event *event) {
     }
 
     tree->Fill();
+    log_message(DEBUG_TRACE, "TreeWriter", "Filled tree with event number " + std::to_string(event_number));
 }
 
 void event_writer::close() {
+    log_message(DEBUG_DEBUG, "TreeWriter", "Closing file " + file_name);
     file->Write();
     file->Close();
 }
