@@ -1,5 +1,4 @@
 #pragma once
-#ifdef USE_ROOT
 
 #include "event_aligner.h"
 #include "waveform_builder.h"
@@ -9,6 +8,7 @@
 #include <list>
 #include <string>
 
+#ifdef USE_ROOT
 #include <TROOT.h>
 #include <TFile.h>
 #include <TTree.h>
@@ -126,3 +126,15 @@ public:
 };
 
 #endif // USE_ROOT
+#ifndef USE_ROOT 
+
+
+class event_writer {
+public:
+    event_writer(const std::string &file_name, int num_kcu, int num_samples, int detector) {};
+    ~event_writer() {};
+
+    void write_event(aligned_event *event) {};
+    void close() {};
+};
+#endif
