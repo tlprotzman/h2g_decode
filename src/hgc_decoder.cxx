@@ -139,7 +139,7 @@ bool hgc_decoder::get_next_events() {
             wbs[i]->build(lb->get_completed(i));
             wbs[i]->unwrap_counters();
         }
-        std::list<kcu_event*> *single_kcu_events[NUM_KCU];
+        std::list<kcu_event*> **single_kcu_events = new std::list<kcu_event*>*[NUM_KCU];
         for (int i = 0; i < NUM_KCU; i++) {
             single_kcu_events[i] = wbs[i]->get_complete();
         }
@@ -158,6 +158,7 @@ bool hgc_decoder::get_next_events() {
             log_message(DEBUG_WARNING, "No events found for 100000 packets, giving up");
             return false;
         }
+        delete[] single_kcu_events;
     }
     return true;
 }
