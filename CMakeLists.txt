@@ -2,8 +2,22 @@ cmake_minimum_required(VERSION 3.10)
 
 # Project name
 project(h2g_decode)
-set(CMAKE_CXX_STANDARD 17)
+# Attempt to extract -std=c++XX from root-config --cflags, default to 20 if not found
+execute_process(
+    COMMAND root-config --cflags
+    OUTPUT_VARIABLE ROOT_CFLAGS_STD
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+string(REGEX MATCH "-std=c\\+\\+[0-9]+" STD_FLAG "${ROOT_CFLAGS_STD}")
+if(STD_FLAG)
+    string(REGEX REPLACE "-std=c\\+\\+" "" CXX_STANDARD "${STD_FLAG}")
+    set(CMAKE_CXX_STANDARD ${CXX_STANDARD})
+else()
+    set(CMAKE_CXX_STANDARD 20)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+message(STATUS "Using C++ standard: ${CMAKE_CXX_STANDARD}")
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -fPIC")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g")

@@ -100,7 +100,7 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
         int farthest_off = 0;
         for (int i = 0; i  < num_fpga; i++) {
             // long delta = std::max(timestamp_delta[i] - avg, avg - timestamp_delta[i]);
-            long delta = abs(timestamp_delta[i] - avg);
+            long delta = std::abs(timestamp_delta[i] - avg);
             if (delta > max_range) {
                 max_range = delta;
                 farthest_off = i;
@@ -114,7 +114,7 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
                             " Average: " + std::to_string(avg) + 
                             " Difference: " + std::to_string(timestamp_delta[farthest_off] - avg));
         
-        if (abs(max_range) < 1) {
+        if (std::abs(max_range) < 1) {
             log_message(DEBUG_DEBUG, "EventAligner", "Creating new aligned event - timestamps within range");
             // Build a new aligned event
             aligned_event *ae = new aligned_event(num_fpga, 144);   // Number of channels is hardcoded for now
