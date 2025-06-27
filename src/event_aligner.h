@@ -7,6 +7,7 @@ Takes a collection of built waveforms and attempts to align them across multiple
 #include "waveform_builder.h"
 
 #include <list>
+#include <cstdint>
 
 class aligned_event {
 private:

@@ -6,6 +6,7 @@
 #include <iostream>
 #include <list>
 #include <vector>
+#include <cstdint>
 
 aligned_event::aligned_event(uint32_t num_fpga, uint32_t channels_per_fpga) {
     this->num_fpga = num_fpga;

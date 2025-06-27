@@ -2,6 +2,7 @@
 
 #include <istream>
 #include <sstream>
+#include <cstdint>
 
 file_stream::file_stream(const char *fname, uint32_t num_fpgas) {
     this->num_fpgas = num_fpgas;

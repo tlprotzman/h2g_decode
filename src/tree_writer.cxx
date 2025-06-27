@@ -34,25 +34,25 @@ event_writer::event_writer(const std::string &file_name, int num_kcu, int num_sa
 
     
 
-    event_values.timestamps = new uint[num_kcu];
+    event_values.timestamps = new uint32_t[num_kcu];
     tree->Branch("event_number", &event_values.event_number, "event_number/i");
     tree->Branch("timestamps", event_values.timestamps, Form("timestamps[%d]/i", num_kcu));
     tree->Branch("num_samples", &event_values.num_samples, "num_samples/i");
 
     // Somewhat gross hack to make this a continuous block of memory so it writes to a ttree nicely
-    event_values.adc_block = new uint[num_channels * num_samples];
-    event_values.toa_block = new uint[num_channels * num_samples];
-    event_values.tot_block = new uint[num_channels * num_samples];
-    event_values.hamming_block = new uint[num_channels * num_samples];
-    memset(event_values.adc_block, 0, num_channels * num_samples * sizeof(uint));
-    memset(event_values.toa_block, 0, num_channels * num_samples * sizeof(uint));
-    memset(event_values.tot_block, 0, num_channels * num_samples * sizeof(uint));
-    memset(event_values.hamming_block, 0, num_channels * num_samples * sizeof(uint));
+    event_values.adc_block = new uint32_t[num_channels * num_samples];
+    event_values.toa_block = new uint32_t[num_channels * num_samples];
+    event_values.tot_block = new uint32_t[num_channels * num_samples];
+    event_values.hamming_block = new uint32_t[num_channels * num_samples];
+    memset(event_values.adc_block, 0, num_channels * num_samples * sizeof(uint32_t));
+    memset(event_values.toa_block, 0, num_channels * num_samples * sizeof(uint32_t));
+    memset(event_values.tot_block, 0, num_channels * num_samples * sizeof(uint32_t));
+    memset(event_values.hamming_block, 0, num_channels * num_samples * sizeof(uint32_t));
 
-    event_values.samples_adc = new uint*[num_channels];
-    event_values.samples_toa = new uint*[num_channels];
-    event_values.samples_tot = new uint*[num_channels];
-    event_values.sample_hamming_err = new uint*[num_channels];
+    event_values.samples_adc = new uint32_t*[num_channels];
+    event_values.samples_toa = new uint32_t*[num_channels];
+    event_values.samples_tot = new uint32_t*[num_channels];
+    event_values.sample_hamming_err = new uint32_t*[num_channels];
 
     for (int i = 0; i < num_channels; i++) {
         event_values.samples_adc[i] = event_values.adc_block + i * num_samples;
@@ -66,13 +66,13 @@ event_writer::event_writer(const std::string &file_name, int num_kcu, int num_sa
     tree->Branch("tot", event_values.tot_block, Form("tot[%d][%d]/i", num_channels, num_samples));
     tree->Branch("hamming", event_values.hamming_block, Form("hamming[%d][%d]/i", num_channels, num_samples));
 
-    event_values.hit_x = new uint[num_channels];
-    event_values.hit_y = new uint[num_channels];
-    event_values.hit_z = new uint[num_channels];
-    event_values.hit_crystal = new uint[num_channels];
-    event_values.hit_sipm_16i = new uint[num_channels];
-    event_values.hit_sipm_4x4 = new uint[num_channels];
-    event_values.hit_sipm_16p = new uint[num_channels];
+    event_values.hit_x = new uint32_t[num_channels];
+    event_values.hit_y = new uint32_t[num_channels];
+    event_values.hit_z = new uint32_t[num_channels];
+    event_values.hit_crystal = new uint32_t[num_channels];
+    event_values.hit_sipm_16i = new uint32_t[num_channels];
+    event_values.hit_sipm_4x4 = new uint32_t[num_channels];
+    event_values.hit_sipm_16p = new uint32_t[num_channels];
     event_values.good_channel = new bool[num_channels];
     event_values.good_channel_16i = new bool[num_channels];
     event_values.good_channel_4x4 = new bool[num_channels];
@@ -102,8 +102,8 @@ event_writer::event_writer(const std::string &file_name, int num_kcu, int num_sa
     }
 
 
-    event_values.hit_max = new uint[num_channels];
-    event_values.hit_pedestal = new uint[num_channels];
+    event_values.hit_max = new uint32_t[num_channels];
+    event_values.hit_pedestal = new uint32_t[num_channels];
     tree->Branch("hit_max", event_values.hit_max, Form("hit_max[%d]/i", num_channels));
     tree->Branch("hit_pedestal", event_values.hit_pedestal, Form("hit_pedestal[%d]/i", num_channels));
 }

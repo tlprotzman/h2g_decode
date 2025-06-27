@@ -201,8 +201,8 @@ bool line_builder::process_complete() {
 
         int slipped = 0;
 
-        uint header_start_alignment = header >> 28;
-        uint header_end_aligment = header & 0b1111;
+        uint32_t header_start_alignment = header >> 28;
+        uint32_t header_end_aligment = header & 0b1111;
         if (header_start_alignment != 0b0101) {
             slipped++;
             log_message(DEBUG_TRACE, "LineBuilder", "Start header out of alignment! Got " + std::to_string(header_start_alignment));

@@ -17,37 +17,37 @@ class event_writer {
 private:
     // Tree variables
     struct tree_vars {
-        uint event_number;
-        uint *timestamps;   // The four timestamps for the first sample of each event
-        uint num_samples;
+        uint32_t event_number;
+        uint32_t *timestamps;   // The four timestamps for the first sample of each event
+        uint32_t num_samples;
 
         // Raw waveform
-        uint *adc_block;
-        uint *toa_block;
-        uint *tot_block;
-        uint *hamming_block;
+        uint32_t *adc_block;
+        uint32_t *toa_block;
+        uint32_t *tot_block;
+        uint32_t *hamming_block;
 
-        uint **samples_adc;
-        uint **samples_toa;
-        uint **samples_tot;
-        uint **sample_hamming_err;
+        uint32_t **samples_adc;
+        uint32_t **samples_toa;
+        uint32_t **samples_tot;
+        uint32_t **sample_hamming_err;
 
         // Hit location
-        uint *hit_x;
-        uint *hit_y;
-        uint *hit_z;
-        uint *hit_crystal;
-        uint *hit_sipm_16i;
-        uint *hit_sipm_4x4;
-        uint *hit_sipm_16p;
+        uint32_t *hit_x;
+        uint32_t *hit_y;
+        uint32_t *hit_z;
+        uint32_t *hit_crystal;
+        uint32_t *hit_sipm_16i;
+        uint32_t *hit_sipm_4x4;
+        uint32_t *hit_sipm_16p;
         bool *good_channel;
         bool *good_channel_16i;
         bool *good_channel_4x4;
         bool *good_channel_16p;
 
         // Some processing to quickly draw results
-        uint *hit_max;
-        uint *hit_pedestal;
+        uint32_t *hit_max;
+        uint32_t *hit_pedestal;
     };
     tree_vars event_values;
 
