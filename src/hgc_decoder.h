@@ -24,6 +24,7 @@ struct config {
     std::string file_name;
     std::string output_file_name;
     int debug_level;
+    bool adc_truncation;
 };
 
 void test_line_builder(config &cfg);
@@ -62,7 +63,7 @@ class hgc_decoder {
         bool get_next_events();
 
     public:
-        hgc_decoder(const char *file_name, const int detector_id, const int num_kcu, const int debug_level = 0);
+        hgc_decoder(const char *file_name, const int detector_id, const int num_kcu, const int debug_level = 0, bool adc_truncation=false);
         ~hgc_decoder();
         int get_num_samples() {return NUM_SAMPLES;};
 

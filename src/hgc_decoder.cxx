@@ -29,7 +29,7 @@ void test_line_builder(config &cfg) {
     log_message(DEBUG_INFO, "Debug level: " + std::to_string(cfg.debug_level));
     log_message(DEBUG_INFO, "Opening file: " + cfg.file_name);
     
-    auto decoder = new hgc_decoder(cfg.file_name.c_str(), cfg.detector_id, cfg.num_kcu, cfg.debug_level);
+    auto decoder = new hgc_decoder(cfg.file_name.c_str(), cfg.detector_id, cfg.num_kcu, cfg.debug_level, cfg.adc_truncation);
     // Set up the decoder
     if (decoder == nullptr) {
         log_message(DEBUG_ERROR, "Failed to create decoder");
@@ -83,7 +83,7 @@ void hgc_decoder::signpost_detailed_end(std::string msg) {
 }
 
 // start moving to the class based structure
-hgc_decoder::hgc_decoder(const char *file_name, const int detector_id, const int num_kcu, const int debug_level)
+hgc_decoder::hgc_decoder(const char *file_name, const int detector_id, const int num_kcu, const int debug_level, bool adc_truncation)
     : NUM_KCU(num_kcu), DETECTOR_ID(detector_id), debug_level(debug_level) {
 
     // Set up debug logging
@@ -100,7 +100,7 @@ hgc_decoder::hgc_decoder(const char *file_name, const int detector_id, const int
     logger = new stat_logger(NUM_KCU);
     fs = new file_stream(file_name, NUM_KCU);
     NUM_SAMPLES = fs->get_number_samples();
-    lb = new line_builder(NUM_KCU);
+    lb = new line_builder(NUM_KCU, adc_truncation);
     for (int i = 0; i < NUM_KCU; i++) {
         wbs.push_back(new waveform_builder(i, NUM_SAMPLES));
     }

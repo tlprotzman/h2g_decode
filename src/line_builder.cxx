@@ -7,8 +7,9 @@
 #include <memory>
 #include <iostream>
 
-line_builder::line_builder(uint32_t num_fpga) {
+line_builder::line_builder(uint32_t num_fpga, bool truncate_adc) {
     this->num_fpga = num_fpga;
+    this->truncate_adc = truncate_adc;
     in_progress = new std::list<line_stream*>();
     complete = new std::list<line_stream*>();
     samples = new std::vector<std::list<sample*>*>;
@@ -235,6 +236,9 @@ bool line_builder::process_complete() {
                 // [Tc] [Tp][10b ADC][10b TOT] [10b TOA] (case 4 from the data sheet);
                 // Another way to check for bit slip could be to check Tc and Tp..
                 s->adc[ch] = (ls->lines[i]->package[j] >> 20) & 0x3FF;
+                if (truncate_adc) {
+                    s->adc[ch] = s->adc[ch] & 0b1111111100;
+                }
                 s->tot[ch] = (ls->lines[i]->package[j] >> 10) & 0x3FF;
                 s->toa[ch] = ls->lines[i]->package[j] & 0x3FF;
     

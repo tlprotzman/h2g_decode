@@ -53,6 +53,7 @@ private:
     uint32_t events_aborted;
     uint32_t events_completed;
     int32_t num_found[16];
+    bool truncate_adc;
 
     uint32_t bit_converter(uint8_t *buffer, int start, bool big_endian=true);
     uint8_t decode_fpga(uint8_t fpga_id);
@@ -65,7 +66,7 @@ private:
 
 
 public:
-    line_builder(uint32_t num_fpga);
+    line_builder(uint32_t num_fpga, bool truncate_adc=false);
     ~line_builder();
 
     bool process_packet(uint8_t *packet);
