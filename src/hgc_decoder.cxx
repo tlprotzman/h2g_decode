@@ -35,6 +35,7 @@ void test_line_builder(config &cfg) {
         log_message(DEBUG_ERROR, "Failed to create decoder");
         return;
     }
+    // return;
     
     log_message(DEBUG_INFO, "Writing output to: " + cfg.output_file_name);
     
@@ -99,6 +100,7 @@ hgc_decoder::hgc_decoder(const char *file_name, const int detector_id, const int
     // decoder modules
     logger = new stat_logger(NUM_KCU);
     fs = new file_stream(file_name, NUM_KCU);
+    buffer = new uint8_t[fs->get_packet_size()];
     NUM_SAMPLES = fs->get_number_samples();
     lb = new line_builder(NUM_KCU, adc_truncation);
     for (int i = 0; i < NUM_KCU; i++) {

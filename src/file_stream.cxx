@@ -6,6 +6,7 @@
 
 file_stream::file_stream(const char *fname, uint32_t num_fpgas) {
     this->num_fpgas = num_fpgas;
+    this->jumbo_frames = false;
 
     log_message(DEBUG_INFO, "FileStream", "Initializing with " + std::to_string(num_fpgas) + " FPGAs");
     log_message(DEBUG_INFO, "FileStream", "Attempting to open file " + std::string(fname));
@@ -40,12 +41,46 @@ file_stream::file_stream(const char *fname, uint32_t num_fpgas) {
                 }
             }
         }
-        if (line.find("##################################################") != std::string::npos) {
+        else if (line.find("# File Version:") != std::string::npos) {
+            std::istringstream iss(line);
+            std::string token;
+            while (std::getline(iss, token, ' ')) {
+                if (token.find("Version:") != std::string::npos) {
+                    std::getline(iss, token, ' ');
+                    format_major = std::stoi(token);
+                    std::getline(iss, token, ' ');
+                    format_minor = std::stoi(token);
+                    log_message(DEBUG_INFO, "FileStream", "File format version: " + 
+                                std::to_string(format_major) + "." + std::to_string(format_minor));
+                }
+            }
+        }
+        else if (line.find("# Generator Setting jumbo_enable:") != std::string::npos) {
+            std::istringstream iss(line);
+            std::string token;
+            while (std::getline(iss, token, ' ')) {
+                if (token.find("jumbo_enable:") != std::string::npos) {
+                    std::getline(iss, token, ' ');
+                    jumbo_frames = (std::stoi(token) != 0);
+                    log_message(DEBUG_INFO, "FileStream", "Jumbo frames: " + std::string(jumbo_frames ? "enabled" : "disabled"));
+                }
+            }
+        }
+        
+        else if (line.find("##################################################") != std::string::npos) {
             hashline_count++;
             log_message(DEBUG_DEBUG, "FileStream", "Found delimiter line " + std::to_string(hashline_count) + "/2");
         }
     }
     
+    if (this->format_major == 0 && this->format_minor <= 12) {
+        packet_size = 1452;
+    } else if (this->jumbo_frames) {
+        packet_size = 8846;
+    } else {
+        packet_size = 1358;
+    }
+
     current_head = file.tellg();
     log_message(DEBUG_INFO, "FileStream", "Starting at byte " + std::to_string(static_cast<long long>(current_head)));
     

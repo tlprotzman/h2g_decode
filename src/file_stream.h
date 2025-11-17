@@ -16,6 +16,10 @@ private:
     int packets_processed;
 
     int number_samples;
+    int format_major;
+    int format_minor;
+    int packet_size;
+    bool jumbo_frames;
     
     uint32_t num_fpgas;
 
@@ -29,4 +33,5 @@ public:
     int get_file_size() {return file_size;};
     int get_bytes_remaining() {return bytes_remaining;}
     int get_number_samples() {return number_samples;}
+    int get_packet_size() {return packet_size;}
 };

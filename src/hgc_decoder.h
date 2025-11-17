@@ -46,7 +46,7 @@ class hgc_decoder {
         std::vector<waveform_builder*> wbs;
         event_aligner *aligner;
 
-        uint8_t buffer[1452];
+        uint8_t *buffer;
         int heartbeat_counter;
         std::list<aligned_event*> *aligned_buffer;
 
