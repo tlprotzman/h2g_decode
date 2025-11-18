@@ -1,20 +1,27 @@
 #include "waveform_builder.h"
 
 #include "line_builder.h"
+#include "debug_logger.h"
 
 #include <cstdint>
 #include <iostream>
 #include <list>
 
-kcu_event::kcu_event(uint32_t fpga, uint32_t samples) {
+kcu_event::kcu_event(uint32_t fpga, uint32_t num_asics, uint32_t samples) {
     this->fpga = fpga;
+    this->num_asics = num_asics;
     this->samples = samples;
     found = 0;
     added = 0;
     bunch_counter = new uint32_t[samples];
     event_counter = new uint32_t[samples];
     orbit_counter = new uint32_t[samples];
-    timestamp = new uint32_t[samples];
+    timestamp = new uint64_t[samples];
+    samples_counter = new uint32_t[samples];
+    adc = new uint32_t*[num_asics * 72];
+    toa = new uint32_t*[num_asics * 72];
+    tot = new uint32_t*[num_asics * 72];
+    hamming = new uint32_t*[num_asics * 72];
     for (int i = 0; i < 144; i++) {
         adc[i] = new uint32_t[samples];
         toa[i] = new uint32_t[samples];
@@ -52,7 +59,7 @@ kcu_event::~kcu_event() {
 }
 
 bool kcu_event::is_complete() {
-    return added == samples * 4;
+    return added == samples * num_asics * 2;
 }
 
 bool kcu_event::is_ordered() {
@@ -72,8 +79,9 @@ bool kcu_event::is_ordered() {
     return in_order;
 }
 
-waveform_builder::waveform_builder(uint32_t fpga_id, uint32_t num_samples) {
+waveform_builder::waveform_builder(uint32_t fpga_id, uint32_t num_asics, uint32_t num_samples) {
     this->fpga_id = fpga_id;
+    this->num_asics = num_asics;
     this->num_samples = num_samples;
 
     attempted = 0;
@@ -240,7 +248,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
             auto offset = 72 * s->asic + 36 * s->half;
             // Create a new kcu_event
             // std::cout << "Creating new event with timestamp " << s->timestamp << ", offset " << offset << ", and event number " << s->event_counter << std::endl;
-            auto event = new kcu_event(fpga_id, num_samples);
+            auto event = new kcu_event(fpga_id, num_asics, num_samples);
             attempted++;
             for (int j = 0; j < 36; j++) {
                 event->adc[j + offset][0] = s->adc[j];
@@ -276,6 +284,110 @@ bool waveform_builder::build(std::list<sample*> *samples) {
     // std::cout << "bailing with " << samples->size() << " samples left" << std::endl;
     // samples->clear();
     return false;
+}
+
+bool waveform_builder::build_v013(std::list<sample*> *samples) {
+    for (auto sample_itr = samples->begin(); sample_itr != samples->end(); sample_itr++) {
+        auto s = *sample_itr;
+        auto offset = 72 * s->asic + 36 * s->half;
+        // Check if we have a kcu_event for this sample
+        // We will use trigger in counter as the truth for the event number
+        bool found = false;
+        for (auto event = in_progress->rbegin(); event != in_progress->rend(); event++) {
+            if (s->trigger_counter == (*event)->trigger_counter) {
+                found = true;
+                log_message(DEBUG_TRACE, "WaveformBuilder", "Adding to existing event for trigger counter " + std::to_string(s->trigger_counter));
+                (*event)->added++;
+                // Check if the sample exists, and we are adding a new asic/half
+                bool new_sample = true;
+                for (int i = 0; i < (*event)->found; i++) {
+                    if ((*event)->samples_counter[i] == s->sample_counter) {
+                        new_sample = false;
+                        log_message(DEBUG_WARNING, "WaveformBuilder", "Sample already exists for trigger counter " + std::to_string(s->trigger_counter) + " and sample counter " + std::to_string(s->sample_counter));
+                        for (int j = 0; j < 36; j++) {
+                            (*event)->adc[j + offset][i] = s->adc[j];
+                            (*event)->toa[j + offset][i] = s->toa[j];
+                            (*event)->tot[j + offset][i] = s->tot[j];
+                            (*event)->hamming[j + offset][i] = s->hamming_code;
+                        }
+                        break;
+                    }
+                }
+                if (new_sample) {
+                    (*event)->found++;
+                    log_message(DEBUG_TRACE, "WaveformBuilder", "Adding new sample for trigger counter " + std::to_string(s->trigger_counter) + " and sample counter " + std::to_string(s->sample_counter));
+                    // Check what sample number to insert it at
+                    int insert_at = (*event)->found;
+                    while (insert_at > 0 && (*event)->samples_counter[insert_at - 1] > s->sample_counter) {
+                        insert_at--;
+                    }
+                    log_message(DEBUG_TRACE, "WaveformBuilder", "Inserting at position " + std::to_string(insert_at));
+                    // Shift all later samples forward
+                    for (int i = (*event)->found; i > insert_at; i--) {
+                        log_message(DEBUG_TRACE, "WaveformBuilder", "Shifting sample " + std::to_string(i - 1) + " to position " + std::to_string(i));
+                        for (int j = 0; j < 72 * num_asics; j++) {
+                            (*event)->adc[j][i] = (*event)->adc[j][i - 1];
+                            (*event)->toa[j][i] = (*event)->toa[j][i - 1];
+                            (*event)->tot[j][i] = (*event)->tot[j][i - 1];
+                            (*event)->hamming[j][i] = (*event)->hamming[j][i - 1];
+                        }
+                        (*event)->bunch_counter[i] = (*event)->bunch_counter[i - 1];
+                        (*event)->event_counter[i] = (*event)->event_counter[i - 1];
+                        (*event)->orbit_counter[i] = (*event)->orbit_counter[i - 1];
+                        (*event)->timestamp[i] = (*event)->timestamp[i - 1];
+                        (*event)->samples_counter[i] = (*event)->samples_counter[i - 1];
+                    }
+                    // Insert the new sample
+                    for (int j = 0; j < 36; j++) {
+                        (*event)->adc[j + offset][insert_at] = s->adc[j];
+                        (*event)->toa[j + offset][insert_at] = s->toa[j];
+                        (*event)->tot[j + offset][insert_at] = s->tot[j];
+                        (*event)->hamming[j + offset][insert_at] = s->hamming_code;
+                    }
+                    (*event)->bunch_counter[insert_at] = s->bunch_counter;
+                    (*event)->event_counter[insert_at] = s->event_counter;
+                    (*event)->orbit_counter[insert_at] = s->orbit_counter;
+                    (*event)->timestamp[insert_at] = s->timestamp;
+                    (*event)->samples_counter[insert_at] = s->sample_counter;
+                }
+                log_message(DEBUG_TRACE, "WaveformBuilder", "Event " + std::to_string((*event)->trigger_counter) + " has " + std::to_string((*event)->added) + " samples added out of " + std::to_string(num_samples * num_asics * 2) + ". Found = " + std::to_string((*event)->found));
+                if ((*event)->is_complete()) {
+                    log_message(DEBUG_TRACE, "WaveformBuilder", "Event complete for trigger counter " + std::to_string(s->trigger_counter));
+                    complete->push_back(*event);
+                    completed++;
+                    in_progress->erase(std::next(event).base());
+                }
+                delete s;
+                sample_itr = samples->erase(sample_itr);
+                break;
+            }
+        }
+        if (found) {
+            continue;
+        }
+        log_message(DEBUG_TRACE, "WaveformBuilder", "Creating new event for trigger counter " + std::to_string(s->trigger_counter));
+        // It does not exist.  Let's create a new event
+        auto event = new kcu_event(fpga_id, num_asics, num_samples);
+        attempted++;
+        for (int j = 0; j < 36; j++) {
+            event->adc[j + offset][0] = s->adc[j];
+            event->toa[j + offset][0] = s->toa[j];
+            event->tot[j + offset][0] = s->tot[j];
+            event->hamming[j + offset][0] = s->hamming_code;
+        }
+        event->bunch_counter[0] = s->bunch_counter;
+        event->event_counter[0] = s->event_counter;
+        event->orbit_counter[0] = s->orbit_counter;
+
+        event->trigger_counter = s->trigger_counter;
+        event->samples_counter[0] = s->sample_counter;
+        event->found = 1;
+        event->added = 1;
+        in_progress->push_back(event);
+        delete s;
+        sample_itr = samples->erase(sample_itr);
+    }
+    return true;
 }
 
 void waveform_builder::unwrap_counters() {

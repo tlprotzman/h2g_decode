@@ -207,3 +207,13 @@ bool event_aligner::align(std::list<kcu_event*> **single_kcu_events) {
     }
     return true;
 }
+
+bool event_aligner::align_v013(std::list<kcu_event*> **single_kcu_events) {
+    // Not yet implemented
+    log_message(DEBUG_ERROR, "EventAligner", "align_v013 not yet implemented");
+    return false;
+
+    // Timestamps are 164 ticks apart
+    // Event counter increments every sample
+    // Trigger in increments every l0 
+}

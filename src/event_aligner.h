@@ -38,6 +38,8 @@ public:
     event_aligner(uint32_t num_fpga);
     ~event_aligner();
     bool align(std::list<kcu_event*> **single_kcu_events);
+    bool align_v013(std::list<kcu_event*> **single_kcu_events);
     std::list<aligned_event*> *get_complete() {return complete;}
     void clear_complete() {complete->clear();}
 };
+

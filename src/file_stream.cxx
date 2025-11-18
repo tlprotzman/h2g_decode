@@ -46,12 +46,23 @@ file_stream::file_stream(const char *fname, uint32_t num_fpgas) {
             std::string token;
             while (std::getline(iss, token, ' ')) {
                 if (token.find("Version:") != std::string::npos) {
-                    std::getline(iss, token, ' ');
-                    format_major = std::stoi(token);
-                    std::getline(iss, token, ' ');
-                    format_minor = std::stoi(token);
-                    log_message(DEBUG_INFO, "FileStream", "File format version: " + 
-                                std::to_string(format_major) + "." + std::to_string(format_minor));
+                    std::string version_token;
+                    if (iss >> version_token) {
+                        try {
+                            auto dot = version_token.find('.');
+                            if (dot != std::string::npos) {
+                                format_major = std::stoi(version_token.substr(0, dot));
+                                format_minor = std::stoi(version_token.substr(dot + 1));
+                            } else {
+                                format_major = std::stoi(version_token);
+                                format_minor = 0;
+                            }
+                            log_message(DEBUG_INFO, "FileStream", "File format version: " +
+                                        std::to_string(format_major) + "." + std::to_string(format_minor));
+                        } catch (const std::exception &e) {
+                            log_message(DEBUG_ERROR, "FileStream", std::string("Failed to parse file version: ") + e.what());
+                        }
+                    }
                 }
             }
         }
@@ -103,7 +114,6 @@ file_stream::~file_stream() {
 }
 
 int file_stream::read_packet(uint8_t *buffer) {
-    uint32_t packet_size = 1452;
     // Check if PACKET_SIZE bytes are available to read
     file.seekg(0, std::ios::end);
     if (file.tellg() - current_head < packet_size) {

@@ -32,6 +32,8 @@ public:
     int get_num_packets() {return packets_processed;}
     int get_file_size() {return file_size;};
     int get_bytes_remaining() {return bytes_remaining;}
+    int get_format_major() {return format_major;}
+    int get_format_minor() {return format_minor;}
     int get_number_samples() {return number_samples;}
     int get_packet_size() {return packet_size;}
 };

@@ -25,6 +25,7 @@ void print_usage() {
     std::cout << "  -r, --run         Run number (required)" << std::endl;
     std::cout << "  -d, --detector    Detector ID (default: 0, LFHCAL: 1, EEEMCAL: 2)" << std::endl;
     std::cout << "  -n, --num-kcu     Number of KCUs (default: 4)" << std::endl;
+    std::cout << "  -a, --num-asic    Number of ASICs per KCU (default: 2)" << std::endl;
     std::cout << "  -g, --debug       Enable debug output with INFO level" << std::endl;
     std::cout << "  -G, --debug-level Set debug level explicitly:" << std::endl;
     std::cout << "                      0: OFF, 1: ERROR, 2: WARNING, 3: INFO, 4: DEBUG, 5: TRACE" << std::endl;
@@ -36,6 +37,7 @@ int main(int argc, char **argv) {
     int run_number = -1;   // Required parameter
     int det = 0;           // Default value 0
     int num_kcu = 4;       // Default value 4
+    int num_asic = 2;      // Default value 2
     int debug_level = 0;   // Default value off
     bool adc_truncation = false; // Default value false
     
@@ -43,6 +45,7 @@ int main(int argc, char **argv) {
         {"run", required_argument, nullptr, 'r'},
         {"detector", required_argument, nullptr, 'd'},
         {"num-kcu", required_argument, nullptr, 'n'},
+        {"num-asic", required_argument, nullptr, 'a'},
         {"debug", optional_argument, nullptr, 'g'},
         {"debug-level", required_argument, nullptr, 'G'},
         {"truncate", no_argument, nullptr, 'T'},
@@ -51,7 +54,7 @@ int main(int argc, char **argv) {
     };
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "r:d:n:g::G:Th", long_options, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "r:d:n:a:g::G:Th", long_options, nullptr)) != -1) {
         switch (opt) {
             case 'r':
                 run_number = std::stoi(optarg);
@@ -79,6 +82,9 @@ int main(int argc, char **argv) {
                 break;
             case 'n':
                 num_kcu = std::stoi(optarg);
+                break;
+            case 'a':
+                num_asic = std::stoi(optarg);
                 break;
             case 'T':
                 adc_truncation = true;
@@ -120,6 +126,7 @@ int main(int argc, char **argv) {
     log_message(DEBUG_INFO, "Running h2g_decode with run number " + std::to_string(run_number) + 
               ", detector ID " + std::to_string(det) + 
               ", num KCU " + std::to_string(num_kcu) + 
+              ", num ASIC " + std::to_string(num_asic) +
               ", debug level " + std::to_string(debug_level) +
               ", ADC truncation " + (adc_truncation ? "enabled" : "disabled") +
               ", data directory " + std::string(data_directory) + 
@@ -129,6 +136,7 @@ int main(int argc, char **argv) {
     cfg.run_number = run_number;
     cfg.detector_id = det;
     cfg.num_kcu = num_kcu;
+    cfg.num_asic = num_asic;
     cfg.debug_level = debug_level;
     cfg.adc_truncation = adc_truncation;
     char file_name[256];

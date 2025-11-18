@@ -13,6 +13,7 @@ Collects individual samples built by line_builder and builds waveforms from them
 class kcu_event {
 private:
     uint32_t fpga;
+    uint32_t num_asics;
     uint32_t samples;
     uint32_t found;
     uint32_t added;
@@ -20,7 +21,9 @@ private:
     uint32_t *bunch_counter;
     uint32_t *event_counter;
     uint32_t *orbit_counter;
-    uint32_t *timestamp;
+    uint64_t *timestamp;
+    uint32_t *samples_counter;
+    uint32_t trigger_counter;
 
     // Maybe we can simplifly things by unwrapping the counter
     long unwrapped_timestamp;
@@ -29,13 +32,13 @@ private:
 
     bool aligned;
 
-    uint32_t *adc[144];
-    uint32_t *toa[144];
-    uint32_t *tot[144];
-    uint32_t *hamming[144];
+    uint32_t **adc;
+    uint32_t **toa;
+    uint32_t **tot;
+    uint32_t **hamming;
 
 public:
-    kcu_event(uint32_t fpga, uint32_t samples);
+    kcu_event(uint32_t fpga, uint32_t num_asics, uint32_t samples);
     ~kcu_event();
 
     bool is_complete();
@@ -59,6 +62,7 @@ class waveform_builder {
 private:
     uint32_t fpga_id;
     uint32_t num_samples;
+    uint32_t num_asics;
 
     uint32_t attempted;
     uint32_t aborted;
@@ -73,9 +77,10 @@ private:
     std::list<kcu_event*> *complete;
 
 public:
-    waveform_builder(uint32_t fpga_id, uint32_t num_samples);
+    waveform_builder(uint32_t fpga_id, uint32_t num_asics, uint32_t num_samples);
     ~waveform_builder();
     bool build(std::list<sample*> *samples);
+    bool build_v013(std::list<sample*> *samples);
     void unwrap_counters();
     std::list<kcu_event*>* get_complete() {return complete;}
 

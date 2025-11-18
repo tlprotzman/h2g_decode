@@ -75,6 +75,15 @@ uint32_t line_builder::bit_converter(uint8_t *buffer, int start, bool big_endian
     return (buffer[start + 3] << 24) + (buffer[start + 2] << 16) + (buffer[start + 1] << 8) + buffer[start];
 }
 
+uint64_t line_builder::bit_converter_64(uint8_t *buffer, int start, bool big_endian) {
+    if (big_endian) {
+        return ((uint64_t)buffer[start] << 56) + ((uint64_t)buffer[start + 1] << 48) + ((uint64_t)buffer[start + 2] << 40) + ((uint64_t)buffer[start + 3] << 32) +
+               ((uint64_t)buffer[start + 4] << 24) + ((uint64_t)buffer[start + 5] << 16) + ((uint64_t)buffer[start + 6] << 8) + (uint64_t)buffer[start + 7];
+    }
+    return ((uint64_t)buffer[start + 7] << 56) + ((uint64_t)buffer[start + 6] << 48) + ((uint64_t)buffer[start + 5] << 40) + ((uint64_t)buffer[start + 4] << 32) +
+           ((uint64_t)buffer[start + 3] << 24) + ((uint64_t)buffer[start + 2] << 16) + ((uint64_t)buffer[start + 1] << 8) + (uint64_t)buffer[start];
+}
+
 uint8_t line_builder::decode_fpga(uint8_t fpga_id) {
     return fpga_id;
 }
@@ -113,7 +122,7 @@ bool line_builder::is_complete(line_stream *ls) {
     return ls->found == 5;
 }
 
-bool line_builder::process_packet(uint8_t *packet) {
+bool line_builder::process_packet_v012(uint8_t *packet) {
     // If there are more than 50 in the queue, we've lost some lines
     while (in_progress->size() > 50) {
         auto ls = in_progress->front();
@@ -175,6 +184,110 @@ bool line_builder::process_packet(uint8_t *packet) {
         }
     }
     return false;
+}
+
+bool line_builder::process_packet_v013(uint8_t *packet, int packet_size) {
+    int decode_ptr = 0;
+    // Read through until we find the start of a data packet
+    while (decode_ptr < packet_size - 2) {
+        if (packet[decode_ptr] == 0xAA && packet[decode_ptr + 1] == 0x5A) {
+            log_message(DEBUG_TRACE, "LineBuilder", "Found data packet at byte " + std::to_string(decode_ptr));
+            // Make sure the full data for a sample is present
+            if (decode_ptr + 192 > packet_size) {
+                log_message(DEBUG_WARNING, "LineBuilder", "Incomplete data packet at end of buffer");
+                return false;
+            }
+            // Get asic, fpga, half, from header
+            int asic_id = packet[decode_ptr + 2] & 0x0F;
+            int fpga_id = (packet[decode_ptr + 2] >> 4) & 0x0F;
+            int half = decode_half(packet[decode_ptr + 3]);
+            if (half == -1) {
+                log_message(DEBUG_ERROR, "LineBuilder", "Invalid half ID: " + std::to_string(packet[decode_ptr + 3]));
+                return false;
+            }
+            log_message(DEBUG_TRACE, "LineBuilder", "Decoding packet for FPGA " + std::to_string(fpga_id) + 
+                        ", ASIC " + std::to_string(asic_id) + 
+                        ", half " + std::to_string(half));
+
+            if (fpga_id < 0 || fpga_id > num_fpga) {
+                log_message(DEBUG_ERROR, "LineBuilder", "Invalid FPGA ID: " + std::to_string(fpga_id));
+                return false;
+            }
+            if (half == -1) {
+                log_message(DEBUG_ERROR, "LineBuilder", "Invalid half ID: " + std::to_string(half));
+                return false;
+            }
+
+            int trg_in_ctr = bit_converter(packet, decode_ptr + 4, true);
+            int trg_out_ctr = bit_converter(packet, decode_ptr + 8, true);
+            int event_ctr = bit_converter(packet, decode_ptr + 12, true);
+            uint64_t timestamp = bit_converter_64(packet, decode_ptr + 16, true);
+
+            log_message(DEBUG_TRACE, "LineBuilder", "Timestamp: " + std::to_string(timestamp) + 
+                        ", Event Counter: " + std::to_string(event_ctr) + 
+                        ", Trigger In: " + std::to_string(trg_in_ctr) + 
+                        ", Trigger Out: " + std::to_string(trg_out_ctr));
+
+            // The last 8 bytes are currently spare
+            decode_ptr += 32;
+
+            // Process the HGCROC data.  For simplicity, I'll replicate the line structure from v0.12 and prior
+            uint32_t package[5][8];
+            for (int line_num = 0; line_num < 5; line_num++) {
+                for (int word_num = 0; word_num < 8; word_num++) {
+                    package[line_num][word_num] = bit_converter(packet, decode_ptr, true);
+                    decode_ptr += 4;
+                }
+            }
+
+            // Now we have the full data for this sample, process it
+            auto s = new struct sample;
+            s->fpga = fpga_id;
+            s->timestamp = timestamp;
+            s->asic = asic_id;
+            s->half = half;
+            s->sample_counter = event_ctr;
+            s->trigger_counter = trg_in_ctr;
+
+            auto header = package[0][0];
+            s->bunch_counter = (header >> 16) & 0b111111111111;
+            s->event_counter = (header >> 10) & 0b111111;
+            s->orbit_counter = (header >> 7) & 0b111;
+            s->hamming_code = (header >> 4) & 0b111;
+
+            auto cm = package[0][1];
+            auto calib = package[2][4];
+            auto crc = package[4][7];
+
+            int ch = 0;
+            for (int i = 0; i < 5; i++) {
+                for (int j = 0; j < 8; j++) {
+                    // Skip the defined channels
+                    if ((i == 0 && j == 0) | (i == 0 && j == 1) | (i == 2 && j == 4) | (i == 4 && j == 7)) {
+                        continue;
+                    }
+                    s->adc[ch] = (package[i][j] >> 20) & 0x3FF;
+                    if (truncate_adc) {
+                        s->adc[ch] = s->adc[ch] & 0b1111111100;
+                    }
+                    s->tot[ch] = (package[i][j] >> 10) & 0x3FF;
+                    s->toa[ch] = package[i][j] & 0x3FF;
+
+                    // TOT Decoder
+                    if (s->tot[ch] & 0x200) {
+                        s->tot[ch] = s->tot[ch] & 0b0111111111;
+                        s->tot[ch] = s->tot[ch] << 3;
+                    }
+                    ch++;
+                }
+            }
+            samples->at(s->fpga)->push_back(s);
+        }
+        else {
+            decode_ptr++;
+        }
+    }
+    return true;
 }
 
 bool line_builder::process_complete() {

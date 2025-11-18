@@ -21,6 +21,7 @@ struct config {
     int run_number;
     int detector_id;
     int num_kcu;
+    int num_asic;
     std::string file_name;
     std::string output_file_name;
     int debug_level;
@@ -35,6 +36,7 @@ class hgc_decoder {
         // Configuration variables
         int run_number;
         const int NUM_KCU;
+        const int NUM_ASIC;
         const int DETECTOR_ID;
         int NUM_SAMPLES;
         int debug_level;
@@ -61,9 +63,11 @@ class hgc_decoder {
         void signpost_detailed_end(std::string msg);
 
         bool get_next_events();
+        bool process_v012_packet();
+        bool process_v013_packet();
 
     public:
-        hgc_decoder(const char *file_name, const int detector_id, const int num_kcu, const int debug_level = 0, bool adc_truncation=false);
+        hgc_decoder(const char *file_name, const int detector_id, const int num_kcu, const int num_asic, const int debug_level = 0, bool adc_truncation=false);
         ~hgc_decoder();
         int get_num_samples() {return NUM_SAMPLES;};
 

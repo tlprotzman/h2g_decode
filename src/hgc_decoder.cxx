@@ -29,7 +29,7 @@ void test_line_builder(config &cfg) {
     log_message(DEBUG_INFO, "Debug level: " + std::to_string(cfg.debug_level));
     log_message(DEBUG_INFO, "Opening file: " + cfg.file_name);
     
-    auto decoder = new hgc_decoder(cfg.file_name.c_str(), cfg.detector_id, cfg.num_kcu, cfg.debug_level, cfg.adc_truncation);
+    auto decoder = new hgc_decoder(cfg.file_name.c_str(), cfg.detector_id, cfg.num_kcu, cfg.num_asic, cfg.debug_level, cfg.adc_truncation);
     // Set up the decoder
     if (decoder == nullptr) {
         log_message(DEBUG_ERROR, "Failed to create decoder");
@@ -84,8 +84,8 @@ void hgc_decoder::signpost_detailed_end(std::string msg) {
 }
 
 // start moving to the class based structure
-hgc_decoder::hgc_decoder(const char *file_name, const int detector_id, const int num_kcu, const int debug_level, bool adc_truncation)
-    : NUM_KCU(num_kcu), DETECTOR_ID(detector_id), debug_level(debug_level) {
+hgc_decoder::hgc_decoder(const char *file_name, const int detector_id, const int num_kcu, const int num_asic, const int debug_level, bool adc_truncation)
+    : NUM_KCU(num_kcu), NUM_ASIC(num_asic), DETECTOR_ID(detector_id), debug_level(debug_level) {
 
     // Set up debug logging
     logger = new stat_logger(NUM_KCU);
@@ -104,7 +104,7 @@ hgc_decoder::hgc_decoder(const char *file_name, const int detector_id, const int
     NUM_SAMPLES = fs->get_number_samples();
     lb = new line_builder(NUM_KCU, adc_truncation);
     for (int i = 0; i < NUM_KCU; i++) {
-        wbs.push_back(new waveform_builder(i, NUM_SAMPLES));
+        wbs.push_back(new waveform_builder(i, NUM_ASIC, NUM_SAMPLES));
     }
     aligner = new event_aligner(NUM_KCU);
     heartbeat_counter = 0;
@@ -124,6 +124,52 @@ hgc_decoder::~hgc_decoder() {
     delete logger;
 }
 
+bool hgc_decoder::process_v012_packet() {
+    lb->process_packet_v012(buffer);
+    lb->process_complete();
+    for (int i = 0; i < NUM_KCU; i++) {
+        wbs[i]->build(lb->get_completed(i));
+        wbs[i]->unwrap_counters();
+    }
+    std::list<kcu_event*> **single_kcu_events = new std::list<kcu_event*>*[NUM_KCU];
+    for (int i = 0; i < NUM_KCU; i++) {
+        single_kcu_events[i] = wbs[i]->get_complete();
+    }
+    aligner->align(single_kcu_events);
+    aligned_buffer = aligner->get_complete();
+    if (aligned_buffer->size() > 0) {
+        heartbeat_counter = 0;
+        log_message(DEBUG_TRACE, "Found " + std::to_string(aligned_buffer->size()) + " aligned events");
+    } else {
+        heartbeat_counter++;
+        if (heartbeat_counter % 10000 == 0) {
+            log_message(DEBUG_DEBUG, "No events found for " + std::to_string(heartbeat_counter) + " packets");
+        }
+    }
+    if (heartbeat_counter > 100000) {
+        log_message(DEBUG_WARNING, "No events found for 100000 packets, giving up");
+        return false;
+    }
+    delete[] single_kcu_events;
+    return true;
+}
+
+bool hgc_decoder::process_v013_packet() {
+    log_message(DEBUG_TRACE, "Processing v0.13+ packet");
+    lb->process_packet_v013(buffer,fs->get_packet_size());
+    for (int i = 0; i < NUM_KCU; i++) {
+        wbs[i]->build_v013(lb->get_completed(i));
+    }
+    std::list<kcu_event*> **single_kcu_events = new std::list<kcu_event*>*[NUM_KCU];
+    for (int i = 0; i < NUM_KCU; i++) {
+        single_kcu_events[i] = wbs[i]->get_complete();
+    }
+    aligner->align_v013(single_kcu_events);
+
+
+    return true;
+}
+
 bool hgc_decoder::get_next_events() {
     int ret = fs->read_packet(buffer);
     if (ret == 0) { // we have reached the end of the file, nothing left to do
@@ -135,32 +181,16 @@ bool hgc_decoder::get_next_events() {
         return true;
     }
     if (ret == 1) {
-        lb->process_packet(buffer);
-        lb->process_complete();
-        for (int i = 0; i < NUM_KCU; i++) {
-            wbs[i]->build(lb->get_completed(i));
-            wbs[i]->unwrap_counters();
-        }
-        std::list<kcu_event*> **single_kcu_events = new std::list<kcu_event*>*[NUM_KCU];
-        for (int i = 0; i < NUM_KCU; i++) {
-            single_kcu_events[i] = wbs[i]->get_complete();
-        }
-        aligner->align(single_kcu_events);
-        aligned_buffer = aligner->get_complete();
-        if (aligned_buffer->size() > 0) {
-            heartbeat_counter = 0;
-            log_message(DEBUG_TRACE, "Found " + std::to_string(aligned_buffer->size()) + " aligned events");
+        if (fs->get_format_major() == 0 && fs->get_format_minor() <= 12) {
+            return process_v012_packet();
+        } else if (fs->get_format_major() == 0 && fs->get_format_minor() >= 13) {
+            return process_v013_packet();
         } else {
-            heartbeat_counter++;
-            if (heartbeat_counter % 10000 == 0) {
-                log_message(DEBUG_DEBUG, "No events found for " + std::to_string(heartbeat_counter) + " packets");
-            }
-        }
-        if (heartbeat_counter > 100000) {
-            log_message(DEBUG_WARNING, "No events found for 100000 packets, giving up");
+            log_message(DEBUG_ERROR, "Unsupported file format version: " + 
+                        std::to_string(fs->get_format_major()) + "." + 
+                        std::to_string(fs->get_format_minor()));
             return false;
         }
-        delete[] single_kcu_events;
     }
     return true;
 }
