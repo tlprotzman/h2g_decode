@@ -286,7 +286,8 @@ bool waveform_builder::build(std::list<sample*> *samples) {
     return false;
 }
 
-bool waveform_builder::build_v013(std::list<sample*> *samples) {
+bool waveform_builder::build_v013_old(std::list<sample*> *samples) {
+    return true;
     for (auto sample_itr = samples->begin(); sample_itr != samples->end(); sample_itr++) {
         auto s = *sample_itr;
         log_message(DEBUG_TRACE, "WaveformBuilder", "Processing sample with trigger counter " + std::to_string(s->trigger_counter) + ", sample counter " + std::to_string(s->sample_counter) + ", asic " + std::to_string(s->asic) + ", half " + std::to_string(s->half));
@@ -353,7 +354,7 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
                     (*event)->timestamp[insert_at] = s->timestamp;
                     (*event)->samples_counter[insert_at] = s->sample_counter;
                 }
-                log_message(DEBUG_TRACE, "WaveformBuilder", "\t-Event " + std::to_string((*event)->trigger_counter) + " has " + std::to_string((*event)->added) + " samples added out of " + std::to_string(num_samples * num_asics * 2) + ". Found = " + std::to_string((*event)->found));
+                // log_message(DEBUG_TRACE, "WaveformBuilder", "\t-Event " + std::to_string((*event)->trigger_counter) + " has " + std::to_string((*event)->added) + " samples added out of " + std::to_string(num_samples * num_asics * 2) + ". Found = " + std::to_string((*event)->found));
                 if ((*event)->is_complete()) {
                     log_message(DEBUG_TRACE, "WaveformBuilder", "\t-Event complete for trigger counter " + std::to_string(s->trigger_counter));
                     complete->push_back(*event);
@@ -392,6 +393,77 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
     }
     return true;
 }
+
+// sample/event trg counter increments once per l0
+// sample/event sample counter increments once per sample
+
+bool waveform_builder::build_v013(std::list<sample*> *samples) {
+    log_message(DEBUG_TRACE, "WaveformBuilder", "Processing " + std::to_string(samples->size()) + " samples");
+    for (auto sample_itr = samples->begin(); sample_itr != samples->end(); sample_itr++) {
+        auto sample = *sample_itr;
+        // First, check if there is already an event for this sample
+        bool found_event = false;
+        for (auto event_itr = in_progress->begin(); event_itr != in_progress->end(); event_itr++) {
+            auto event = *event_itr;
+            if (sample->trigger_counter == event->trigger_counter) {
+                log_message(DEBUG_TRACE, "WaveformBuilder", "\t- Found existing event");
+                found_event = true;
+                // We found the event.  Now, check if it is a new or existing sample
+                bool found_sample = false;
+                for (int i = 0; i < event->found; i++) {
+                    if (sample->sample_counter == event->samples_counter[i]) {
+                        log_message(DEBUG_TRACE, "WaveformBuilder", "Found existing sample");
+                        found_sample = true;
+                        // todo: actually add the sample
+                        event->added++; // It's only a new half, don't increment found                        
+                        break;
+                    }
+                }
+                if (!found_sample) {
+                    // We didn't find the sample, add a new one
+                    // Figure out where it should go
+                    int insert_location = 0;
+                    while (insert_location < event->found && sample->sample_counter > event->samples_counter[insert_location]) {
+                        insert_location++;
+                    }
+                    // Everything from insert_location to event->found needs to be shifted one later
+                    for (int i = event->found; i > insert_location; i--) {
+                        event->samples_counter[i] = event->samples_counter[i - 1];
+                    }
+
+                    event->samples_counter[insert_location] = sample->sample_counter;
+                    event->found++; // Add both since it's a new sample and new half
+                    event->added++;
+                }
+                if (event->is_complete()) {
+                    log_message(DEBUG_TRACE, "WaveformBuilder", "Event " + std::to_string(event->trigger_counter) + " complete!");
+                    for (int i = 0; i < event->found; i++) {
+                        log_message(DEBUG_TRACE, "WaveformBuilder", "\tSample " + std::to_string(i) + " sample counter: " + std::to_string(event->samples_counter[i]));
+                    }
+                    complete->push_back(event);
+                    in_progress->erase(event_itr);
+                }
+                break;
+            }
+        }
+
+
+        if (!found_event) {
+            log_message(DEBUG_TRACE, "WaveformBuilder", "\t- Did not find existing event, making new event.");
+            auto event = new kcu_event(fpga_id, num_asics, num_samples);
+            event->trigger_counter = sample->trigger_counter;
+            event->samples_counter[0] = sample->sample_counter;
+            event->found = 1;   // Number of samples found (i.e. 1 through n_samples)
+            event->added = 1;   // Number of halfs added (i.e. 1 through n_samples * n_asics * 2)
+            in_progress->push_back(event);
+        }
+        // We are done with this sample, delete it
+        delete sample;
+        sample_itr = samples->erase(sample_itr);
+    }
+    return true;
+}
+
 
 void waveform_builder::unwrap_counters() {
     for (auto it = complete->begin(); it != complete->end(); ) {
