@@ -22,7 +22,7 @@ kcu_event::kcu_event(uint32_t fpga, uint32_t num_asics, uint32_t samples) {
     toa = new uint32_t*[num_asics * 72];
     tot = new uint32_t*[num_asics * 72];
     hamming = new uint32_t*[num_asics * 72];
-    for (int i = 0; i < 144; i++) {
+    for (int i = 0; i < num_asics * 72; i++) {
         adc[i] = new uint32_t[samples];
         toa[i] = new uint32_t[samples];
         tot[i] = new uint32_t[samples];
@@ -289,21 +289,24 @@ bool waveform_builder::build(std::list<sample*> *samples) {
 bool waveform_builder::build_v013(std::list<sample*> *samples) {
     for (auto sample_itr = samples->begin(); sample_itr != samples->end(); sample_itr++) {
         auto s = *sample_itr;
+        log_message(DEBUG_TRACE, "WaveformBuilder", "Processing sample with trigger counter " + std::to_string(s->trigger_counter) + ", sample counter " + std::to_string(s->sample_counter) + ", asic " + std::to_string(s->asic) + ", half " + std::to_string(s->half));
         auto offset = 72 * s->asic + 36 * s->half;
         // Check if we have a kcu_event for this sample
         // We will use trigger in counter as the truth for the event number
-        bool found = false;
+        bool event_found = false;
         for (auto event = in_progress->rbegin(); event != in_progress->rend(); event++) {
+            log_message(DEBUG_TRACE, "WaveformBuilder", "\t\t-Checking against event with trigger counter " + std::to_string((*event)->trigger_counter));
             if (s->trigger_counter == (*event)->trigger_counter) {
-                found = true;
-                log_message(DEBUG_TRACE, "WaveformBuilder", "Adding to existing event for trigger counter " + std::to_string(s->trigger_counter));
+                event_found = true;
+                log_message(DEBUG_TRACE, "WaveformBuilder", "\t-Adding to existing event for trigger counter " + std::to_string(s->trigger_counter));
                 (*event)->added++;
                 // Check if the sample exists, and we are adding a new asic/half
                 bool new_sample = true;
                 for (int i = 0; i < (*event)->found; i++) {
+                    log_message(DEBUG_TRACE, "WaveformBuilder", "\t\t-Checking against existing sample counter " + std::to_string((*event)->samples_counter[i]));
                     if ((*event)->samples_counter[i] == s->sample_counter) {
                         new_sample = false;
-                        log_message(DEBUG_WARNING, "WaveformBuilder", "Sample already exists for trigger counter " + std::to_string(s->trigger_counter) + " and sample counter " + std::to_string(s->sample_counter));
+                        log_message(DEBUG_WARNING, "WaveformBuilder", "\t-Sample already exists for trigger counter " + std::to_string(s->trigger_counter) + " and sample counter " + std::to_string(s->sample_counter));
                         for (int j = 0; j < 36; j++) {
                             (*event)->adc[j + offset][i] = s->adc[j];
                             (*event)->toa[j + offset][i] = s->toa[j];
@@ -314,17 +317,17 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
                     }
                 }
                 if (new_sample) {
-                    (*event)->found++;
-                    log_message(DEBUG_TRACE, "WaveformBuilder", "Adding new sample for trigger counter " + std::to_string(s->trigger_counter) + " and sample counter " + std::to_string(s->sample_counter));
+                    log_message(DEBUG_TRACE, "WaveformBuilder", "\t-Adding new sample for trigger counter " + std::to_string(s->trigger_counter) + " and sample counter " + std::to_string(s->sample_counter));
                     // Check what sample number to insert it at
                     int insert_at = (*event)->found;
+                    (*event)->found++;
                     while (insert_at > 0 && (*event)->samples_counter[insert_at - 1] > s->sample_counter) {
                         insert_at--;
                     }
-                    log_message(DEBUG_TRACE, "WaveformBuilder", "Inserting at position " + std::to_string(insert_at));
+                    log_message(DEBUG_TRACE, "WaveformBuilder", "\t-Inserting at position " + std::to_string(insert_at));
                     // Shift all later samples forward
                     for (int i = (*event)->found; i > insert_at; i--) {
-                        log_message(DEBUG_TRACE, "WaveformBuilder", "Shifting sample " + std::to_string(i - 1) + " to position " + std::to_string(i));
+                        log_message(DEBUG_TRACE, "WaveformBuilder", "\t-Shifting sample " + std::to_string(i - 1) + " to position " + std::to_string(i));
                         for (int j = 0; j < 72 * num_asics; j++) {
                             (*event)->adc[j][i] = (*event)->adc[j][i - 1];
                             (*event)->toa[j][i] = (*event)->toa[j][i - 1];
@@ -350,9 +353,9 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
                     (*event)->timestamp[insert_at] = s->timestamp;
                     (*event)->samples_counter[insert_at] = s->sample_counter;
                 }
-                log_message(DEBUG_TRACE, "WaveformBuilder", "Event " + std::to_string((*event)->trigger_counter) + " has " + std::to_string((*event)->added) + " samples added out of " + std::to_string(num_samples * num_asics * 2) + ". Found = " + std::to_string((*event)->found));
+                log_message(DEBUG_TRACE, "WaveformBuilder", "\t-Event " + std::to_string((*event)->trigger_counter) + " has " + std::to_string((*event)->added) + " samples added out of " + std::to_string(num_samples * num_asics * 2) + ". Found = " + std::to_string((*event)->found));
                 if ((*event)->is_complete()) {
-                    log_message(DEBUG_TRACE, "WaveformBuilder", "Event complete for trigger counter " + std::to_string(s->trigger_counter));
+                    log_message(DEBUG_TRACE, "WaveformBuilder", "\t-Event complete for trigger counter " + std::to_string(s->trigger_counter));
                     complete->push_back(*event);
                     completed++;
                     in_progress->erase(std::next(event).base());
@@ -362,10 +365,10 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
                 break;
             }
         }
-        if (found) {
+        if (event_found) {
             continue;
         }
-        log_message(DEBUG_TRACE, "WaveformBuilder", "Creating new event for trigger counter " + std::to_string(s->trigger_counter));
+        log_message(DEBUG_TRACE, "WaveformBuilder", "\t-Creating new event for trigger counter " + std::to_string(s->trigger_counter));
         // It does not exist.  Let's create a new event
         auto event = new kcu_event(fpga_id, num_asics, num_samples);
         attempted++;

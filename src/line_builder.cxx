@@ -241,7 +241,8 @@ bool line_builder::process_packet_v013(uint8_t *packet, int packet_size) {
             }
 
             // Now we have the full data for this sample, process it
-            auto s = new struct sample;
+            std::cerr << "made it here??" << std::endl;
+            struct sample *s = new struct sample; // why does it crash here... 
             s->fpga = fpga_id;
             s->timestamp = timestamp;
             s->asic = asic_id;
