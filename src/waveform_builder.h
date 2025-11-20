@@ -81,7 +81,6 @@ public:
     ~waveform_builder();
     bool build(std::list<sample*> *samples);
     bool build_v013(std::list<sample*> *samples);
-    bool build_v013_old(std::list<sample*> *samples);
     void unwrap_counters();
     std::list<kcu_event*>* get_complete() {return complete;}
 
