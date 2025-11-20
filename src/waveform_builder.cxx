@@ -401,6 +401,7 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
     log_message(DEBUG_TRACE, "WaveformBuilder", "Processing " + std::to_string(samples->size()) + " samples");
     for (auto sample_itr = samples->begin(); sample_itr != samples->end(); sample_itr++) {
         auto sample = *sample_itr;
+        auto offset = 72 * sample->asic + 36 * sample->half;
         // First, check if there is already an event for this sample
         bool found_event = false;
         for (auto event_itr = in_progress->begin(); event_itr != in_progress->end(); event_itr++) {
@@ -414,7 +415,12 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
                     if (sample->sample_counter == event->samples_counter[i]) {
                         log_message(DEBUG_TRACE, "WaveformBuilder", "Found existing sample");
                         found_sample = true;
-                        // todo: actually add the sample
+                        for (int j = 0; j < 36; j++) {
+                            event->adc[j + offset][i] = sample->adc[j];
+                            event->toa[j + offset][i] = sample->toa[j];
+                            event->tot[j + offset][i] = sample->tot[j];
+                            event->hamming[j + offset][i] = sample->hamming_code;
+                        }
                         event->added++; // It's only a new half, don't increment found                        
                         break;
                     }
@@ -429,9 +435,28 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
                     // Everything from insert_location to event->found needs to be shifted one later
                     for (int i = event->found; i > insert_location; i--) {
                         event->samples_counter[i] = event->samples_counter[i - 1];
+                        for (int j = 0; j < 36; j++) {
+                            event->adc[j + offset][i] = event->adc[j + offset][i - 1];
+                            event->toa[j + offset][i] = event->toa[j + offset][i - 1];
+                            event->tot[j + offset][i] = event->tot[j + offset][i - 1];
+                            event->hamming[j + offset][i] = event->hamming[j + offset][i - 1];
+                        }
+                        event->bunch_counter[i] = event->bunch_counter[i - 1];
+                        event->event_counter[i] = event->event_counter[i - 1];
+                        event->orbit_counter[i] = event->orbit_counter[i - 1];
                     }
 
                     event->samples_counter[insert_location] = sample->sample_counter;
+                    for (int j = 0; j < 36; j++) {
+                        event->adc[j + offset][insert_location] = sample->adc[j];
+                        event->toa[j + offset][insert_location] = sample->toa[j];
+                        event->tot[j + offset][insert_location] = sample->tot[j];
+                        event->hamming[j + offset][insert_location] = sample->hamming_code;
+
+                    }
+                    event->bunch_counter[insert_location] = sample->bunch_counter;
+                    event->event_counter[insert_location] = sample->event_counter;
+                    event->orbit_counter[insert_location] = sample->orbit_counter;
                     event->found++; // Add both since it's a new sample and new half
                     event->added++;
                 }
@@ -455,6 +480,16 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
             event->samples_counter[0] = sample->sample_counter;
             event->found = 1;   // Number of samples found (i.e. 1 through n_samples)
             event->added = 1;   // Number of halfs added (i.e. 1 through n_samples * n_asics * 2)
+            for (int j = 0; j < 36; j++) {
+                event->adc[j + offset][0] = sample->adc[j];
+                event->toa[j + offset][0] = sample->toa[j];
+                event->tot[j + offset][0] = sample->tot[j];
+                event->hamming[j + offset][0] = sample->hamming_code;
+            }
+            event->bunch_counter[0] = sample->bunch_counter;
+            event->event_counter[0] = sample->event_counter;
+            event->orbit_counter[0] = sample->orbit_counter;
+
             in_progress->push_back(event);
         }
         // We are done with this sample, delete it
