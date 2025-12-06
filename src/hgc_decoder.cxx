@@ -29,7 +29,7 @@ void test_line_builder(config &cfg) {
     log_message(DEBUG_INFO, "Debug level: " + std::to_string(cfg.debug_level));
     log_message(DEBUG_INFO, "Opening file: " + cfg.file_name);
     
-    auto decoder = new hgc_decoder(cfg.file_name.c_str(), cfg.detector_id, cfg.num_kcu, cfg.num_asic, cfg.debug_level, cfg.adc_truncation);
+    auto decoder          = new hgc_decoder(cfg.file_name.c_str(), cfg.detector_id, cfg.num_kcu, cfg.num_asic, cfg.debug_level, cfg.adc_truncation);
     // Set up the decoder
     if (decoder == nullptr) {
         log_message(DEBUG_ERROR, "Failed to create decoder");
@@ -39,19 +39,20 @@ void test_line_builder(config &cfg) {
     
     log_message(DEBUG_INFO, "Writing output to: " + cfg.output_file_name);
     
-    event_writer *writer = new event_writer(cfg.output_file_name.c_str(), cfg.num_kcu, decoder->get_num_samples(), cfg.detector_id);
+    event_writer *writer  = new event_writer(cfg.output_file_name.c_str(), cfg.num_kcu, cfg.num_asic, decoder->get_num_samples(), cfg.detector_id);
 
     // Loop over the events
     int event_count = 0;
     for (auto event : *decoder) {
         if (event_count % 100 == 0) {
-            log_message(DEBUG_DEBUG, "Processing event " + std::to_string(event_count));
+            log_message(DEBUG_INFO, "Processing event " + std::to_string(event_count));
         }
-        
+    
         writer->write_event(event);
         event_count++;
         
         if (stop) {
+        // if (stop || event_count == 150) {
             log_message(DEBUG_INFO, "Stopping...");
             break;
         }
@@ -90,26 +91,32 @@ hgc_decoder::hgc_decoder(const char *file_name, const int detector_id, const int
     // Set up debug logging
     logger = new stat_logger(NUM_KCU);
     #ifdef __APPLE__
-    signpost_logger = os_log_create("com.tristan.app", "run_decoder");
-    signpost_id = os_signpost_id_generate(signpost_logger);
-    detailed_signpost_id = os_signpost_id_generate(signpost_logger);
+    signpost_logger       = os_log_create("com.tristan.app", "run_decoder");
+    signpost_id           = os_signpost_id_generate(signpost_logger);
+    detailed_signpost_id  = os_signpost_id_generate(signpost_logger);
     assert(signpost_id != OS_SIGNPOST_ID_INVALID);
     assert(detailed_signpost_id != OS_SIGNPOST_ID_INVALID);
     #endif
 
     // decoder modules
-    logger = new stat_logger(NUM_KCU);
-    fs = new file_stream(file_name, NUM_KCU);
-    buffer = new uint8_t[fs->get_packet_size()];
-    NUM_SAMPLES = fs->get_number_samples();
-    lb = new line_builder(NUM_KCU, adc_truncation);
+    logger        = new stat_logger(NUM_KCU);
+    fs            = new file_stream(file_name, NUM_KCU);
+    log_message(DEBUG_INFO, "Setting up buffer with " + std::to_string(fs->get_packet_size()));
+    buffer        = new uint8_t[fs->get_packet_size()];
+    NUM_SAMPLES   = fs->get_number_samples();
+    lb            = new line_builder(NUM_KCU, adc_truncation);
+    num_fullWbs   = new long[NUM_KCU];
     for (int i = 0; i < NUM_KCU; i++) {
         wbs.push_back(new waveform_builder(i, NUM_ASIC, NUM_SAMPLES));
+        num_fullWbs[i] = 0;
     }
-    aligner = new event_aligner(NUM_KCU);
+    aligner           = new event_aligner(NUM_KCU);
     heartbeat_counter = 0;
-
-    aligned_buffer = new std::list<aligned_event*>();
+    aligned_buffer    = new std::list<aligned_event*>();
+    
+    num_proc_events   = 0;
+    last_trig_Int     = -1;
+    last_trig_Out     = -1;
 }
 
 hgc_decoder::~hgc_decoder() {
@@ -154,19 +161,56 @@ bool hgc_decoder::process_v012_packet() {
     return true;
 }
 
+//**************************************************************************
+// read packet produced by KCU & HGCROC protoboards FW version > 5.06X
+//**************************************************************************
 bool hgc_decoder::process_v013_packet() {
-    log_message(DEBUG_TRACE, "Processing v0.13+ packet");
+    // -------------------------------------------------------------------
+    // read line wise (and build corresponding data packets 
+    // per KCU, trigger events and machine gun Nr for the corresponding trigger
+    // executed for every UDP packet 
+    // -------------------------------------------------------------------
     lb->process_packet_v013(buffer,fs->get_packet_size());
+    // -------------------------------------------------------------------
+    // Try to build waveform for a single KCU out of the individual 
+    // -------------------------------------------------------------------
     for (int i = 0; i < NUM_KCU; i++) {
         wbs[i]->build_v013(lb->get_completed(i));
     }
+    // -------------------------------------------------------------------
+    // obtain single KCU events and print statistiscs
+    // -------------------------------------------------------------------
     std::list<kcu_event*> **single_kcu_events = new std::list<kcu_event*>*[NUM_KCU];
+    bool updatedWbs = false;
     for (int i = 0; i < NUM_KCU; i++) {
         single_kcu_events[i] = wbs[i]->get_complete();
+        // check if a new full waveform has been build
+        if ( num_fullWbs[i] < (long)single_kcu_events[i]->size()){
+          log_message(DEBUG_INFO, "Found " + std::to_string(wbs[i]->get_num_completed()) + "/" + std::to_string(wbs[i]->get_num_attempted()) +  " attempted waveforms delta "+  std::to_string(wbs[i]->get_num_attempted()-wbs[i]->get_num_completed()) +" for KCU " + std::to_string(i) );
+          log_message(DEBUG_INFO, "To be processed " + std::to_string(single_kcu_events[i]->size())+" for KCU " + std::to_string(i) );
+          if (wbs[i]->get_num_in_progress() > 1){
+            wbs[i]->print_in_progress();
+          }
+          num_fullWbs[i] = (long)single_kcu_events[i]->size();
+          updatedWbs = true;
+        }
     }
-    aligner->align_v013(single_kcu_events);
-
-
+    // -------------------------------------------------------------------
+    // Try to align the events from different KCUs
+    // -------------------------------------------------------------------
+    if (updatedWbs){
+        aligner->align_v013(single_kcu_events, NUM_ASIC, last_trig_Int, last_trig_Out);
+        aligned_buffer        = aligner->get_complete();
+        if (aligned_buffer->size() > 0 ) {
+            heartbeat_counter = 0;
+            num_proc_events = num_proc_events+(long)aligned_buffer->size();
+            log_message(DEBUG_INFO, "Found total " + std::to_string(num_proc_events) + " aligned events, added  " + std::to_string((long)aligned_buffer->size()));
+        }
+    }
+    // -------------------------------------------------------------------
+    // clean memory
+    // -------------------------------------------------------------------
+    delete[] single_kcu_events;
     return true;
 }
 
@@ -181,6 +225,7 @@ bool hgc_decoder::get_next_events() {
         return true;
     }
     if (ret == 1) {
+        // log_message(DEBUG_INFO, "Reading next chunk of data!" + std::to_string(fs->get_num_packets()) +" packets processed!");
         if (fs->get_format_major() == 0 && fs->get_format_minor() <= 12) {
             return process_v012_packet();
         } else if (fs->get_format_major() == 0 && fs->get_format_minor() >= 13) {

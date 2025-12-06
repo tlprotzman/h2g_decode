@@ -130,7 +130,7 @@ int file_stream::read_packet(uint8_t *buffer) {
 
     if ((float)current_head / (float)end > current_percent + 0.0001) {
         current_percent = (float)current_head / (float)end;
-        log_message(DEBUG_DEBUG, "\rFILE STREAM: " + std::to_string((int)(100 * (float) current_head / (float)end)) + "% complete");
+        log_message(DEBUG_INFO, "\rFILE STREAM: " + std::to_string((float)(100 * (float) current_head / (float)end)) + "% complete");
     }
 
     // Check if the read was successful

@@ -32,7 +32,8 @@ struct sample {
     uint32_t half;
     uint64_t timestamp;
     uint32_t sample_counter;
-    uint32_t trigger_counter;
+    uint32_t trigger_counter_Int; // internal trigger counter
+    uint32_t trigger_counter_Ext; // external trigger counter
     uint32_t bunch_counter;
     uint32_t event_counter;
     uint32_t orbit_counter;

@@ -118,7 +118,7 @@ private:
     int eeemcal_16p_channel_map[4] = {6, 25, 63, 46};
 
 public:
-    event_writer(const std::string &file_name, int num_kcu, int num_samples, int detector);
+    event_writer(const std::string &file_name, int num_kcu, int num_asic, int num_samples, int detector);
     ~event_writer();
 
     void write_event(aligned_event *event);
@@ -131,7 +131,7 @@ public:
 
 class event_writer {
 public:
-    event_writer(const std::string &file_name, int num_kcu, int num_samples, int detector) {};
+    event_writer(const std::string &file_name, int num_kcu, int num_asic, int num_samples, int detector) {};
     ~event_writer() {};
 
     void write_event(aligned_event *event) {};

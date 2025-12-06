@@ -29,7 +29,6 @@ struct config {
 };
 
 void test_line_builder(config &cfg);
-std::list<aligned_event*> *run_event_builder(char *file_name);
 
 class hgc_decoder {
     private:
@@ -45,6 +44,7 @@ class hgc_decoder {
         stat_logger *logger;
         file_stream *fs;
         line_builder *lb;
+        long *num_fullWbs;
         std::vector<waveform_builder*> wbs;
         event_aligner *aligner;
 
@@ -66,6 +66,9 @@ class hgc_decoder {
         bool process_v012_packet();
         bool process_v013_packet();
 
+        long num_proc_events;
+        long last_trig_Int;
+        long last_trig_Out;
     public:
         hgc_decoder(const char *file_name, const int detector_id, const int num_kcu, const int num_asic, const int debug_level = 0, bool adc_truncation=false);
         ~hgc_decoder();
