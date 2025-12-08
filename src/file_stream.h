@@ -24,7 +24,7 @@ private:
     uint32_t num_fpgas;
 
 public:
-    file_stream(const char *fname, uint32_t num_fpgas);
+    file_stream(const char *fname, uint32_t num_fpgas, uint32_t num_asics);
     ~file_stream();
 
     int read_packet(uint8_t *buffer);

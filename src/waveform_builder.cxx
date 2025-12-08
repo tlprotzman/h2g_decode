@@ -377,7 +377,7 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
                     event->added++;
                 }
                 if (event->is_complete()) {
-                    log_message(DEBUG_DEBUG, "WaveformBuilder", "FPGA :" + std::to_string(event->fpga) +  " Event " + std::to_string(event->trigger_counter_Int) + " " + std::to_string(event->trigger_counter_Ext) + " complete!");
+                    log_message(DEBUG_INFO, "WaveformBuilder", "FPGA :" + std::to_string(event->fpga) +  " Event " + std::to_string(event->trigger_counter_Int) + " " + std::to_string(event->trigger_counter_Ext) + " complete!");
                     bool correctTiming    = true;
                     bool correctNSamples  = true;
                     // check integrity of waveform: Does it have the right number of samples?

@@ -100,7 +100,7 @@ hgc_decoder::hgc_decoder(const char *file_name, const int detector_id, const int
 
     // decoder modules
     logger        = new stat_logger(NUM_KCU);
-    fs            = new file_stream(file_name, NUM_KCU);
+    fs            = new file_stream(file_name, NUM_KCU, NUM_ASIC);
     log_message(DEBUG_INFO, "Setting up buffer with " + std::to_string(fs->get_packet_size()));
     buffer        = new uint8_t[fs->get_packet_size()];
     NUM_SAMPLES   = fs->get_number_samples();

@@ -15,6 +15,9 @@ private:
     uint32_t channels_per_fpga;
     uint32_t events_found;
     long *timestamp;
+    long max_timestamp_diff = 0;
+    long av_timestamp_diff  = 0;
+    long max_misaligned     = 0;
     kcu_event **events;
 
 public:
