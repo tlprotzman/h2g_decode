@@ -106,9 +106,15 @@ hgc_decoder::hgc_decoder(const char *file_name, const int detector_id, const int
     NUM_SAMPLES   = fs->get_number_samples();
     lb            = new line_builder(NUM_KCU, adc_truncation);
     num_fullWbs   = new long[NUM_KCU];
+    num_attWbs    = new long[NUM_KCU];
+    num_disWbs    = new long[NUM_KCU];
+    num_progWbs   = new long[NUM_KCU];
     for (int i = 0; i < NUM_KCU; i++) {
         wbs.push_back(new waveform_builder(i, NUM_ASIC, NUM_SAMPLES));
         num_fullWbs[i] = 0;
+        num_attWbs[i]  = 0;
+        num_disWbs[i]  = 0;
+        num_progWbs[i] = 0;
     }
     aligner           = new event_aligner(NUM_KCU);
     heartbeat_counter = 0;
@@ -191,7 +197,10 @@ bool hgc_decoder::process_v013_packet() {
           if (wbs[i]->get_num_in_progress() > 1){
             wbs[i]->print_in_progress();
           }
-          num_fullWbs[i] = (long)single_kcu_events[i]->size();
+          num_fullWbs[i] = (long)wbs[i]->get_num_completed();  // fully assembled waveforms per KCU
+          num_attWbs[i]  = (long)wbs[i]->get_num_attempted();   // attempted waveforms per KCU
+          num_disWbs[i]  = (long)wbs[i]->get_num_aborted();     // discarded/aborted waveforms per KCU
+          num_progWbs[i] = (long)wbs[i]->get_num_in_progress(); // wavforms in progress per KCU
           updatedWbs = true;
         }
     }

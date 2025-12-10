@@ -292,6 +292,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
 // sample/event sample counter increments once per sample
 bool waveform_builder::build_v013(std::list<sample*> *samples) {
     log_message(DEBUG_TRACE, "WaveformBuilder", "Processing " + std::to_string(samples->size()) + " samples");
+    
     for (auto sample_itr = samples->begin(); sample_itr != samples->end(); sample_itr++) {
         auto sample = *sample_itr;
         auto offset = 72 * sample->asic + 36 * sample->half;
@@ -299,6 +300,18 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
         
         // First, check if there is already an event for this sample
         bool found_event = false;
+        // remove the first 25 events in progress (unlikely to be ever successfully build)
+        if (in_progress->size() > 50){
+            int delcount = 0;
+            for (auto event_itr = in_progress->begin(); event_itr != in_progress->end() && delcount < 25; event_itr++) {
+                auto event = *event_itr;
+                aborted++;
+                delcount++;
+                log_message(DEBUG_ERROR, "WaveformBuilder", "FPGA :" + std::to_string(event->fpga) + " Event " + std::to_string(event->trigger_counter_Int) + " " + std::to_string(event->trigger_counter_Ext) + "couldn't be completed");
+                in_progress->erase(event_itr);
+            }
+        }
+        
         for (auto event_itr = in_progress->begin(); event_itr != in_progress->end(); event_itr++) {
             auto event = *event_itr;
             // Check if the trigger counter for this KCU already exists
@@ -477,7 +490,7 @@ void waveform_builder::unwrap_counters() {
 }
 
 uint32_t waveform_builder::get_num_aborted() {
-    return aborted + in_progress->size();
+    return aborted;
 }
 
 uint32_t waveform_builder::get_num_in_order() {
