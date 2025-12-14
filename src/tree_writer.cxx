@@ -99,6 +99,10 @@ event_writer::event_writer(const std::string &file_name, int num_kcu, int num_sa
         tree->Branch("good_channel_16i", event_values.good_channel_16i, Form("good_channel_16i[%d]/O", num_channels));
         tree->Branch("good_channel_4x4", event_values.good_channel_4x4, Form("good_channel_4x4[%d]/O", num_channels));
         tree->Branch("good_channel_16p", event_values.good_channel_16p, Form("good_channel_16p[%d]/O", num_channels));
+    } else if (detector == 3) {
+        tree->Branch("hit_crystal", event_values.hit_crystal, Form("hit_crystal[%d]/i", num_channels));
+        tree->Branch("hit_sipm_16i", event_values.hit_sipm_16i, Form("hit_sipm_16i[%d]/i", num_channels));
+        tree->Branch("good_channel_16i", event_values.good_channel_16i, Form("good_channel_16i[%d]/O", num_channels));
     }
 
 
@@ -270,8 +274,41 @@ void event_writer::write_event(aligned_event *event) {
                 }
             }
         }
+    } else if (detector == 3) {
+        for (int crystal = 0; crystal < 25; crystal++) {
+            for (int sipm = 0; sipm < 16; sipm++) {
+                int fpga = eeemcal_dec2025_fpga_map[crystal];
+                int asic = eeemcal_dec2025_asic_map[crystal];
+                int connector = eeemcal_dec2025_connector_map[crystal];
+                int channel_16i_index = 0;
+                channel_16i_index = fpga * 144 + asic * 72 + eeemcal_16i_channel_map[connector][sipm];
+                event_values.hit_crystal[channel_16i_index] = crystal;
+                event_values.good_channel_16i[channel_16i_index] = true;
+                event_values.hit_sipm_16i[channel_16i_index] = sipm;
+                
+            }
+        }
+        for (int i = 0; i < num_kcu; i++) {
+            auto e = event->get_event(i);
+            event_values.timestamps[i] = e->get_timestamp();
+            for (int j = 0; j < 144; j++) {
+                int channel_index = i * 144 + j;
+                event_values.hit_max[channel_index] = 0;
+                event_values.hit_pedestal[channel_index] = e->get_sample_adc(j, 0);
+                for (int k = 0; k < num_samples; k++) {
+                    event_values.samples_adc[channel_index][k] = e->get_sample_adc(j, k);
+                    if (event_values.samples_adc[channel_index][k] > event_values.hit_max[channel_index]) {
+                        event_values.hit_max[channel_index] = event_values.samples_adc[channel_index][k];
+                    }
+                    event_values.samples_toa[channel_index][k] = e->get_sample_toa(j, k);
+                    event_values.samples_tot[channel_index][k] = e->get_sample_tot(j, k);
+                    event_values.sample_hamming_err[channel_index][k] = e->get_sample_hamming(j, k);
+                }
+            }
+        }
     }
 
+    
     tree->Fill();
     log_message(DEBUG_TRACE, "TreeWriter", "Filled tree with event number " + std::to_string(event_number));
 }
