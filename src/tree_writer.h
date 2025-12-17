@@ -2,6 +2,7 @@
 
 #include "event_aligner.h"
 #include "waveform_builder.h"
+#include "debug_logger.h"
 
 #include <cstdint>
 #include <vector>
@@ -117,32 +118,31 @@ private:
 
     int eeemcal_16p_channel_map[4] = {6, 25, 63, 46};
 
-    // DESY December 2025
-    int eeemcal_dec2025_fpga_map[25] = {1, 2, 1, 2, 2,
-                                3, 3, 0, 0, 1,
-                                1, 2, 2, 3, 0,
-                                3, 0, 2, 0, 0,
-                                1, 2, 1, 2, 1};
+int eeemcal_dec2025_fpga_map[25] = {1, 2, 1, 2, 1,
+                            3, 3, 1, 0, 2,
+                            1, 2, 2, 3, 0,
+                            3, 0, 2, 0, 0,
+                            2, 1, 1, 2, 1};
 
-    // ASIC | ID
-    // 0    | 0
-    // 1    | 1
-    int eeemcal_dec2025_asic_map[25] = { 1, 0, 0, 1, 1,
-                                1, 1, 0, 1, 0,
-                                0, 1, 0, 0, 0,
-                                0, 1, 0, 0, 1,
-                                0, 1, 1, 0, 1};
+// ASIC | ID
+// 0    | 0
+// 1    | 1
+int eeemcal_dec2025_asic_map[25] = { 1, 0, 0, 1, 0,
+                             1, 1, 1, 1, 1,
+                             0, 1, 0, 0, 0,
+                             0, 1, 0, 0, 1,
+                             1, 0, 1, 0, 1};
 
-    // Connector | ID
-    // A        | 0
-    // B        | 1
-    // C        | 2
-    // D        | 3
-    int eeemcal_dec2025_connector_map[25] = { 0,  0,  3,  1,  3,
-                                    0,  3,  2,  2,  0,
-                                    2,  2,  3,  1,  0,
-                                    0,  3,  2,  2,  0,
-                                    1,  0,  3,  1,  2};
+// Connector | ID
+// A        | 0
+// B        | 1
+// C        | 2
+// D        | 3
+int eeemcal_dec2025_connector_map[25] = { 0,  0,  3,  1,  0,
+                                  0,  3,  1,  2,  3,
+                                  2,  0,  3,  1,  0,
+                                  0,  3,  2,  2,  1,
+                                  2,  1,  3,  1,  2};
     
 
 public:
@@ -159,10 +159,10 @@ public:
 
 class event_writer {
 public:
-    event_writer(const std::string &file_name, int num_kcu, int num_samples, int detector) {};
+    event_writer(const std::string &file_name, int num_kcu, int num_samples, int detector) {log_message(DEBUG_ERROR, "TreeWriter", "ROOT not enabled, cannot create writer for file " + file_name);};
     ~event_writer() {};
 
-    void write_event(aligned_event *event) {};
+    void write_event(aligned_event *event) {log_message(DEBUG_WARNING, "TreeWriter", "ROOT not enabled, cannot write event");};
     void close() {};
 };
 #endif
