@@ -78,6 +78,9 @@ public:
     bool process_complete();
     std::list<sample*> *get_completed(uint32_t fpga);
 
+    long get_num_samples_size(int fpga){return samples->at(fpga)->size();};
+    long get_num_events_in_progress(){return in_progress->size();};
+    long get_num_events_completed_current(){return complete->size();};
     int get_num_events_aborted();
     int get_num_events_completed();
     int get_num_found(int fpga, int asic, int half);

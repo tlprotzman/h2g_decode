@@ -307,7 +307,8 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
                 auto event = *event_itr;
                 aborted++;
                 delcount++;
-                log_message(DEBUG_ERROR, "WaveformBuilder", "FPGA :" + std::to_string(event->fpga) + " Event " + std::to_string(event->trigger_counter_Int) + " " + std::to_string(event->trigger_counter_Ext) + "couldn't be completed");
+                log_message(DEBUG_TRACE, "WaveformBuilder", "FPGA :" + std::to_string(event->fpga) + " Event " + std::to_string(event->trigger_counter_Int) + " " + std::to_string(event->trigger_counter_Ext) + "couldn't be completed");
+                delete event;
                 in_progress->erase(event_itr);
             }
         }
@@ -523,3 +524,18 @@ void waveform_builder::print_in_progress() {
         }
     }  
 }
+
+void waveform_builder::drop_first( int nEvt){
+    int delcount = 0;
+    for (auto event_itr = complete->begin(); event_itr != complete->end() && delcount < nEvt; event_itr++) {
+        auto event = *event_itr;
+        delcount++;
+        log_message(DEBUG_TRACE, "WaveformBuilder", "FPGA :" + std::to_string(event->fpga) + " Event " + std::to_string(event->trigger_counter_Int) + " " + std::to_string(event->trigger_counter_Ext) + " cleaned from full waveform - " + std::to_string(delcount)+ " cleaned");
+        delete event;
+        complete->erase(event_itr);
+    }  
+    log_message(DEBUG_INFO, "WaveformBuilder", "done cleaning, cleaned " + std::to_string(delcount) + " events from FPGA " + std::to_string(fpga_id) + " buffer");
+        
+}
+
+

@@ -86,11 +86,13 @@ public:
     bool build_v013(std::list<sample*> *samples);
     void unwrap_counters();
     void print_in_progress();
+    void drop_first(int nEvt);
     std::list<kcu_event*>* get_complete() {return complete;}
 
     uint32_t get_num_aborted();
     uint32_t get_num_completed() {return completed;}
     uint32_t get_num_attempted() {return attempted;}
     uint32_t get_num_in_progress() {if (in_progress!=nullptr) return in_progress->size(); else return 0;}
+    uint32_t get_num_current_completed() {if (complete!=nullptr) return complete->size(); else return 0;}
     uint32_t get_num_in_order();
 };

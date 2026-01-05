@@ -5,7 +5,7 @@ Takes a collection of built waveforms and attempts to align them across multiple
 #pragma once
 
 #include "waveform_builder.h"
-
+#include <map>
 #include <list>
 #include <cstdint>
 
@@ -35,6 +35,8 @@ public:
 class event_aligner {
 private:
     uint32_t num_fpga;
+    std::map<int,int> counterOffsetInt;
+    std::map<int,int> counterOffsetExt;
     std::list<aligned_event*> *complete;
 
 public:

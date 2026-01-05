@@ -44,6 +44,7 @@ class hgc_decoder {
         stat_logger *logger;
         file_stream *fs;
         line_builder *lb;
+        long *num_fullcWbs; // current number of fully build waveforms per KCU in buffer
         long *num_fullWbs;  // number of fully build waveforms per KCU
         long *num_attWbs;   // attempted waveforms per KCU
         long *num_disWbs;   // discarded waveforms per KCU

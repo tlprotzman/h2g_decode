@@ -32,6 +32,10 @@ bool aligned_event::is_complete() {
 
 event_aligner::event_aligner(uint32_t num_fpga) {
     this->num_fpga = num_fpga;
+    for (int i = 0; i < num_fpga; i++){
+      this->counterOffsetInt[i] = 0;
+      this->counterOffsetExt[i] = 0;
+    }
     complete = new std::list<aligned_event*>();
 }
 
@@ -219,9 +223,11 @@ bool event_aligner::align_v013(std::list<kcu_event*> **single_kcu_events, int nu
     std::vector<std::list<kcu_event*>::iterator> iters;
     std::vector<long> last_good_timestamp;
     log_message(DEBUG_DEBUG, "EventAligner", "\t last aligned trigger counters: " + std::to_string(last_trig_Int) + "\t" + std::to_string(last_trig_Ext) );
+
     
     for (uint32_t i = 0; i < num_fpga; i++) {
-        log_message(DEBUG_TRACE, "EventAligner", "\t FPGA: " + std::to_string(i));
+        log_message(DEBUG_INFO, "EventAligner", "\t FPGA: " + std::to_string(i) + "\t counterOffsets " + std::to_string(counterOffsetInt[i]) + "\t" + std::to_string(counterOffsetExt[i])   );
+        // log_message(DEBUG_TRACE, "EventAligner", "\t FPGA: " + std::to_string(i));
         if (single_kcu_events[i]->size() == 0) {
             done = true;
             continue;
@@ -232,9 +238,9 @@ bool event_aligner::align_v013(std::list<kcu_event*> **single_kcu_events, int nu
         // Initialize the iterator to the beginning
         std::list<kcu_event*>::iterator current_it = single_kcu_events[i]->begin();
         if (last_trig_Int != -1 && last_trig_Ext != -1){
-          while (current_it != single_kcu_events[i]->end() && ( (*current_it)->get_trigger_counter_Int() < last_trig_Int || (*current_it)->get_trigger_counter_Ext() < last_trig_Ext) ) {
+          while (current_it != single_kcu_events[i]->end() && ( (*current_it)->get_trigger_counter_Int()-counterOffsetInt[i] < last_trig_Int || (*current_it)->get_trigger_counter_Ext()-counterOffsetExt[i] < last_trig_Ext) ) {
               // Log skipped events (optional, but useful for debugging)
-              log_message(DEBUG_TRACE, "EventAligner", "Skipping event with timestamp: " + std::to_string((*current_it)->get_trigger_counter_Int()) + "\t" + std::to_string((*current_it)->get_trigger_counter_Ext()));
+              log_message(DEBUG_TRACE, "EventAligner", "Skipping event with timestamp: " + std::to_string((*current_it)->get_trigger_counter_Int()-counterOffsetInt[i]) + "\t" + std::to_string((*current_it)->get_trigger_counter_Ext()-counterOffsetExt[i]));
               current_it++; // Move to the next event
           }
         }
@@ -267,8 +273,8 @@ bool event_aligner::align_v013(std::list<kcu_event*> **single_kcu_events, int nu
                 break;
             }
             timestamp_delta.push_back((*next)->get_timestamp() -  last_good_timestamp[i]);
-            trigger_int.push_back((*iter)->get_trigger_counter_Int());
-            trigger_ext.push_back((*iter)->get_trigger_counter_Ext());
+            trigger_int.push_back((*iter)->get_trigger_counter_Int()-counterOffsetInt[i]);  // allow for one time fixing of trigger offset using time alignment
+            trigger_ext.push_back((*iter)->get_trigger_counter_Ext()-counterOffsetExt[i]); // allow for one time fixing of trigger offset using time alignment
             // print only if it isn't the already aligned event
             if (!(trigger_int[i] == last_trig_Int && trigger_ext[i] == last_trig_Ext )){
               log_message(DEBUG_DEBUG, "EventAligner", "FPGA " + std::to_string(i) + 
@@ -277,8 +283,8 @@ bool event_aligner::align_v013(std::list<kcu_event*> **single_kcu_events, int nu
                           " = " + std::to_string(timestamp_delta.back()));
             }
             avg += timestamp_delta.back();
-            avgInt += (double)trigger_int.back();
-            avgExt += (double)trigger_ext.back();
+            avgInt += (double)(trigger_int.back());
+            avgExt += (double)(trigger_ext.back());
         }
         avg /= num_fpga;
         avgInt /= num_fpga;
@@ -369,8 +375,7 @@ bool event_aligner::align_v013(std::list<kcu_event*> **single_kcu_events, int nu
                 iters[i]++;
                 last_good_timestamp[i] = (*iters[i])->get_timestamp();
               }
-              continue;
-              
+              continue;              
             }
             log_message(DEBUG_DEBUG, "EventAligner", "Creating new aligned event - timestamps within range");
             // Build a new aligned event
@@ -389,9 +394,9 @@ bool event_aligner::align_v013(std::list<kcu_event*> **single_kcu_events, int nu
                 ae->max_misaligned      = max_range;
                 // print correct outputs   
                 time_stamps += "FPGA " + std::to_string(i) + ": " + 
-                          std::to_string(ae->timestamp[i]) + "\t" + std::to_string((*iters[i])->get_trigger_counter_Int()) + "\t" + std::to_string((*iters[i])->get_trigger_counter_Ext()) + "\t" ;
-                last_trig_Int= (*iters[i])->get_trigger_counter_Int();
-                last_trig_Ext= (*iters[i])->get_trigger_counter_Ext();
+                          std::to_string(ae->timestamp[i]) + "\t" + std::to_string((*iters[i])->get_trigger_counter_Int()-counterOffsetInt[i]) + "\t" + std::to_string((*iters[i])->get_trigger_counter_Ext()-counterOffsetExt[i]) + "\t" ;
+                last_trig_Int= (*iters[i])->get_trigger_counter_Int()-counterOffsetInt[i];
+                last_trig_Ext= (*iters[i])->get_trigger_counter_Ext()-counterOffsetExt[i];
                 // increment iterator to nex event to set correct last good time stamp
                 iters[i]++;
                 last_good_timestamp[i] = (*iters[i])->get_timestamp();
@@ -399,7 +404,14 @@ bool event_aligner::align_v013(std::list<kcu_event*> **single_kcu_events, int nu
             log_message(DEBUG_INFO, "EventAligner", time_stamps);
             complete->push_back(ae);
         }
-
+        // allow for one time fixing of trigger offset using time alignment
+        else if (max_range == 0 && last_trig_Int == -1 && last_trig_Ext == -1) {
+          log_message(DEBUG_INFO, "EventAligner", "=============== correcting offset once");
+          for (uint32_t i = 0; i < num_fpga; i++) {
+              counterOffsetInt[i] = (*iters[i])->get_trigger_counter_Int()-(*iters[0])->get_trigger_counter_Int();
+              counterOffsetExt[i] = (*iters[i])->get_trigger_counter_Ext()-(*iters[0])->get_trigger_counter_Ext();
+          }
+        }
         // Check if the farthest off is too close or too far
         else if ( 
                   // (trigger_ext[farthest_off_Ext] - avgExt > 0 || trigger_int[farthest_off_Int] - avgInt > 0) &&  // check the trigger first
@@ -420,8 +432,8 @@ bool event_aligner::align_v013(std::list<kcu_event*> **single_kcu_events, int nu
             for (uint32_t i = 0; i < num_fpga; i++) {
                 current_timestamps += std::to_string((*iters[i])->get_timestamp()) + " ";
                 deltas += std::to_string(timestamp_delta[i]) + " ";
-                event_counters_ext += std::to_string((*iters[i])->get_trigger_counter_Ext()) + " ";
-                event_counters_int += std::to_string((*iters[i])->get_trigger_counter_Int()) + " ";
+                event_counters_ext += std::to_string((*iters[i])->get_trigger_counter_Ext()-counterOffsetExt[i]) + " ";
+                event_counters_int += std::to_string((*iters[i])->get_trigger_counter_Int()-counterOffsetInt[i]) + " ";
             }
             
             log_message(DEBUG_TRACE, "EventAligner", current_timestamps);
@@ -452,8 +464,8 @@ bool event_aligner::align_v013(std::list<kcu_event*> **single_kcu_events, int nu
             for (uint32_t i = 0; i < num_fpga; i++) {
                 current_timestamps += std::to_string((*iters[i])->get_timestamp()) + " ";
                 deltas += std::to_string(timestamp_delta[i]) + " ";
-                event_counters_ext += std::to_string((*iters[i])->get_trigger_counter_Ext()) + " ";
-                event_counters_int += std::to_string((*iters[i])->get_trigger_counter_Int()) + " ";
+                event_counters_ext += std::to_string((*iters[i])->get_trigger_counter_Ext()-counterOffsetExt[i]) + " ";
+                event_counters_int += std::to_string((*iters[i])->get_trigger_counter_Int()-counterOffsetInt[i]) + " ";
             }
             
             log_message(DEBUG_TRACE, "EventAligner", current_timestamps);
