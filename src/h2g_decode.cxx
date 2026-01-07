@@ -149,5 +149,4 @@ int main(int argc, char **argv) {
     test_line_builder(cfg);
     return 0;
 
-    // run_event_builder(argv[1]);
 }

@@ -4,7 +4,7 @@
 #include <sstream>
 #include <cstdint>
 
-file_stream::file_stream(const char *fname, uint32_t num_fpgas) {
+file_stream::file_stream(const char *fname, uint32_t num_fpgas, uint32_t num_asics) {
     this->num_fpgas = num_fpgas;
     this->jumbo_frames = false;
 
@@ -41,6 +41,34 @@ file_stream::file_stream(const char *fname, uint32_t num_fpgas) {
                 }
             }
         }
+        else if (line.find("# Number of KCUs:") != std::string::npos) {
+            std::istringstream iss(line);
+            std::string token;
+            while (std::getline(iss, token, ' ')) {
+                if (token.find("KCUs:") != std::string::npos) {
+                    std::getline(iss, token, ' ');
+                    uint32_t tempKCUs = std::stoi(token);
+                    if (tempKCUs != num_fpgas){
+                        log_message(DEBUG_ERROR, "FileStream", "WRONG number of FPGAs configured " + std::to_string(num_fpgas) + " correct number " + std::to_string(tempKCUs));
+                        throw std::runtime_error("Incorrect number of FPGAs configured");
+                    }    
+                }
+            }
+        }
+        else if (line.find("# Number of ASICs:") != std::string::npos) {
+            std::istringstream iss(line);
+            std::string token;
+            while (std::getline(iss, token, ' ')) {
+                if (token.find("ASICs:") != std::string::npos) {
+                    std::getline(iss, token, ' ');
+                    uint32_t tempAsics = std::stoi(token);
+                    if (tempAsics != num_asics){
+                        log_message(DEBUG_ERROR, "FileStream", "WRONG number of ASICs configured:  " + std::to_string(num_asics) + " correct number " + std::to_string(tempAsics));
+                        throw std::runtime_error("Incorrect number of ASICs configured.");
+                    }
+                }
+            }
+        }  
         else if (line.find("# File Version:") != std::string::npos) {
             std::istringstream iss(line);
             std::string token;
@@ -77,6 +105,9 @@ file_stream::file_stream(const char *fname, uint32_t num_fpgas) {
                 }
             }
         }
+        
+        
+        
         
         else if (line.find("##################################################") != std::string::npos) {
             hashline_count++;
@@ -128,9 +159,10 @@ int file_stream::read_packet(uint8_t *buffer) {
     file.read(reinterpret_cast<char*>(buffer), packet_size);;
     current_head = file.tellg();
 
-    if ((float)current_head / (float)end > current_percent + 0.0001) {
+    // print if percentage increase by 0.5%
+    if ((float)current_head / (float)end > current_percent + 0.005) {
         current_percent = (float)current_head / (float)end;
-        log_message(DEBUG_DEBUG, "\rFILE STREAM: " + std::to_string((int)(100 * (float) current_head / (float)end)) + "% complete");
+        log_message(DEBUG_INFO, "\rFILE STREAM: " + std::to_string((float)(100 * (float) current_head / (float)end)) + "% complete");
     }
 
     // Check if the read was successful

@@ -1,6 +1,7 @@
 #include "line_builder.h"
 #include "debug_logger.h"
 
+#include <stdio.h>
 #include <cstdint>
 #include <list>
 #include <vector>
@@ -187,56 +188,87 @@ bool line_builder::process_packet_v012(uint8_t *packet) {
 }
 
 bool line_builder::process_packet_v013(uint8_t *packet, int packet_size) {
-    int decode_ptr = 0;
-    // Read through until we find the start of a data packet
-    while (decode_ptr < packet_size - 2) {
-        if (packet[decode_ptr] == 0xAA && packet[decode_ptr + 1] == 0x5A) {
-            log_message(DEBUG_TRACE, "LineBuilder", "Found data packet at byte " + std::to_string(decode_ptr));
+    // jump over the first 14 bytes of each UDP packet 
+    // this corresponds to the UDP header
+    int decode_ptr  = 14;
+    int nDP         = 0;      // counter of data packets within UDP packet
+    int nDPMax      = 7;      // maximum number of data packets within 1 UDP packet 
+    int sizeDP      = 192;    // size of data packet in byte 
+    
+    // Read UDP packet until the end 
+    while (decode_ptr+sizeDP < packet_size+1 && nDP < nDPMax) {
+        // check whether start of packet has the correct header, if not jump to next data packet
+        if (!(packet[decode_ptr] == 0xAA && packet[decode_ptr + 1] == 0x5A)) {
+          if (packet[decode_ptr] != 0x00){
+            log_message(DEBUG_ERROR, "LineBuilder", "Invalid packet for FPGA ID: " );
+            std::cerr << "Invalid data pack! " << std::endl;
+            for (int i = 0; i < 200/8; i++){
+              for (int j = 0; j < 8; j++){
+                std::cerr << std::hex <<int(packet[decode_ptr + i*8+j]) << "\t" ;
+              }
+              std::cerr << std::endl;  
+            }
+          }
+          decode_ptr=decode_ptr+sizeDP;
+          nDP = nDPMax; // jump over entire packet 
+        } else {
+            int decode_ptr_c = decode_ptr;
             // Make sure the full data for a sample is present
-            if (decode_ptr + 192 > packet_size) {
+            if (decode_ptr + sizeDP > packet_size) {
                 log_message(DEBUG_WARNING, "LineBuilder", "Incomplete data packet at end of buffer");
                 return false;
             }
+             
             // Get asic, fpga, half, from header
-            int asic_id = packet[decode_ptr + 2] & 0x0F;
-            int fpga_id = (packet[decode_ptr + 2] >> 4) & 0x0F;
-            int half = decode_half(packet[decode_ptr + 3]);
+            int asic_id = packet[decode_ptr_c + 2] & 0x0F;
+            int fpga_id = (packet[decode_ptr_c + 2] >> 4);
+            int half = decode_half(packet[decode_ptr_c + 3]);
             if (half == -1) {
-                log_message(DEBUG_ERROR, "LineBuilder", "Invalid half ID: " + std::to_string(packet[decode_ptr + 3]));
-                return false;
+                std::string halfhex = std::format("{:x}", half);
+                log_message(DEBUG_ERROR, "LineBuilder", "Invalid half ID: hex " +  halfhex + " int " +
+                std::to_string(packet[decode_ptr_c + 3]));
+                decode_ptr = decode_ptr+sizeDP;
+                continue;
             }
-            log_message(DEBUG_TRACE, "LineBuilder", "Decoding packet for FPGA " + std::to_string(fpga_id) + 
-                        ", ASIC " + std::to_string(asic_id) + 
-                        ", half " + std::to_string(half));
+            // log_message(DEBUG_TRACE, "LineBuilder", "Decoding packet for FPGA " + std::to_string(fpga_id) + 
+                        // ", ASIC " + std::to_string(asic_id) + 
+                        // ", half " + std::to_string(half));
 
             if (fpga_id < 0 || fpga_id > num_fpga) {
                 log_message(DEBUG_ERROR, "LineBuilder", "Invalid FPGA ID: " + std::to_string(fpga_id));
-                return false;
-            }
-            if (half == -1) {
-                log_message(DEBUG_ERROR, "LineBuilder", "Invalid half ID: " + std::to_string(half));
-                return false;
+                std::cerr << "Invalid half fpga ID! " << std::hex<< int((packet[decode_ptr + 2]>> 4)) << std::endl;
+                for (int i = 0; i < 224/8; i++){
+                  for (int j = 0; j < 8; j++){
+                    std::cerr << std::hex <<int(packet[decode_ptr_c + i*8+j]) << "\t" ;
+                  }
+                  std::cerr << std::endl;  
+                }
+                std::cerr << std::dec << std::endl;  
+                decode_ptr = decode_ptr+sizeDP;
+                continue;
             }
 
-            int trg_in_ctr = bit_converter(packet, decode_ptr + 4, true);
-            int trg_out_ctr = bit_converter(packet, decode_ptr + 8, true);
-            int event_ctr = bit_converter(packet, decode_ptr + 12, true);
-            uint64_t timestamp = bit_converter_64(packet, decode_ptr + 16, true);
+            int trg_in_ctr = bit_converter(packet, decode_ptr_c + 4, true);
+            int trg_out_ctr = bit_converter(packet, decode_ptr_c + 8, true);
+            int event_ctr = bit_converter(packet, decode_ptr_c + 12, true);
+            uint64_t timestamp = bit_converter_64(packet, decode_ptr_c + 16, true);
 
-            log_message(DEBUG_TRACE, "LineBuilder", "Timestamp: " + std::to_string(timestamp) + 
+            log_message(DEBUG_DEBUG, "LineBuilder", "FPGA " +std::to_string(fpga_id) + 
+                        ", ASIC " + std::to_string(asic_id) + 
+                        ", half " + std::to_string(half) + " Timestamp: " + std::to_string(timestamp) + 
                         ", Event Counter: " + std::to_string(event_ctr) + 
                         ", Trigger In: " + std::to_string(trg_in_ctr) + 
                         ", Trigger Out: " + std::to_string(trg_out_ctr));
 
             // The last 8 bytes are currently spare
-            decode_ptr += 32;
+            decode_ptr_c += 32;
 
             // Process the HGCROC data.  For simplicity, I'll replicate the line structure from v0.12 and prior
             uint32_t package[5][8];
             for (int line_num = 0; line_num < 5; line_num++) {
                 for (int word_num = 0; word_num < 8; word_num++) {
-                    package[line_num][word_num] = bit_converter(packet, decode_ptr, true);
-                    decode_ptr += 4;
+                    package[line_num][word_num] = bit_converter(packet, decode_ptr_c, true);
+                    decode_ptr_c += 4;
                 }
             }
 
@@ -247,7 +279,8 @@ bool line_builder::process_packet_v013(uint8_t *packet, int packet_size) {
             s->asic = asic_id;
             s->half = half;
             s->sample_counter = event_ctr;
-            s->trigger_counter = trg_in_ctr;
+            s->trigger_counter_Int = trg_in_ctr;
+            s->trigger_counter_Ext = trg_out_ctr;
 
             auto header = package[0][0];
             s->bunch_counter = (header >> 16) & 0b111111111111;
@@ -282,9 +315,8 @@ bool line_builder::process_packet_v013(uint8_t *packet, int packet_size) {
                 }
             }
             samples->at(s->fpga)->push_back(s);
-        }
-        else {
-            decode_ptr++;
+            decode_ptr=decode_ptr+sizeDP;
+            nDP++;
         }
     }
     return true;
@@ -339,12 +371,13 @@ bool line_builder::process_complete() {
         log_message(DEBUG_TRACE, "LineBuilder", "CRC is " + std::to_string(crc));
 
         int ch = 0;
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 5; i++) { // lines
             for (int j = 0; j < 8; j++) {
                 // Skip what we've already defined
                 if ((i == 0 && j == 0) | (i == 0 && j == 1) | (i == 2 && j == 4) | (i == 4 && j == 7)) {
                     continue;
                 }
+ 
                 // Now we have each channel, we can decode the ADC value out of it
                 // [Tc] [Tp][10b ADC][10b TOT] [10b TOA] (case 4 from the data sheet);
                 // Another way to check for bit slip could be to check Tc and Tp..
