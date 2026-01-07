@@ -50,6 +50,7 @@ file_stream::file_stream(const char *fname, uint32_t num_fpgas, uint32_t num_asi
                     uint32_t tempKCUs = std::stoi(token);
                     if (tempKCUs != num_fpgas){
                         log_message(DEBUG_ERROR, "FileStream", "WRONG number of FPGAs configured " + std::to_string(num_fpgas) + " correct number " + std::to_string(tempKCUs));
+                        throw std::runtime_error("Incorrect number of FPGAs configured");
                     }    
                 }
             }
@@ -63,6 +64,7 @@ file_stream::file_stream(const char *fname, uint32_t num_fpgas, uint32_t num_asi
                     uint32_t tempAsics = std::stoi(token);
                     if (tempAsics != num_asics){
                         log_message(DEBUG_ERROR, "FileStream", "WRONG number of ASICs configured:  " + std::to_string(num_asics) + " correct number " + std::to_string(tempAsics));
+                        throw std::runtime_error("Incorrect number of ASICs configured.");
                     }
                 }
             }
