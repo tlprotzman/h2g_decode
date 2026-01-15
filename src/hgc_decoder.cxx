@@ -354,7 +354,6 @@ hgc_decoder::iterator hgc_decoder::iterator::operator++() {
     }
     aligned_iterator = decoder->aligned_buffer->begin();
     return *this;
-
 }
 
 aligned_event* hgc_decoder::iterator::operator*() {
@@ -362,9 +361,11 @@ aligned_event* hgc_decoder::iterator::operator*() {
     auto e = *aligned_iterator;
     return *aligned_iterator;
 }
+
 hgc_decoder::iterator hgc_decoder::begin() {
     return hgc_decoder::iterator(this);
 }
+
 hgc_decoder::iterator hgc_decoder::end() {
     auto it = hgc_decoder::iterator(nullptr);
     it.aligned_iterator = aligned_buffer->end();
