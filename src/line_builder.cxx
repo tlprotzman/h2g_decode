@@ -224,9 +224,9 @@ bool line_builder::process_packet_v013(uint8_t *packet, int packet_size) {
             int fpga_id = (packet[decode_ptr_c + 2] >> 4);
             int half = decode_half(packet[decode_ptr_c + 3]);
             if (half == -1) {
-                std::string halfhex = std::format("{:x}", half);
-                log_message(DEBUG_ERROR, "LineBuilder", "Invalid half ID: hex " +  halfhex + " int " +
-                std::to_string(packet[decode_ptr_c + 3]));
+                // std::string halfhex = std::format("{:x}", half);
+                // log_message(DEBUG_ERROR, "LineBuilder", "Invalid half ID: hex " +  halfhex + " int " +
+                // std::to_string(packet[decode_ptr_c + 3]));
                 decode_ptr = decode_ptr+sizeDP;
                 continue;
             }
