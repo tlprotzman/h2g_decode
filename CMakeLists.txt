@@ -1,7 +1,28 @@
 cmake_minimum_required(VERSION 3.10)
 
 # Project name
-project(h2g_decode)
+project(h2g_decode VERSION 0.13)
+
+#Path to cmake scripts
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+
+#-----For setting rpath correctly on MAC OS X
+# use, i.e. don't skip the full RPATH for the build tree
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+# when building, don't use the install RPATH already
+# (but later on when installing)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+# add the automatically determined parts of the RPATH
+# which point to directories outside the build tree to the install RPATH
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+# the RPATH to be used when installing, but only if it's not a system directory
+list(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CMAKE_INSTALL_PREFIX}/lib" isSystemDir)
+if("${isSystemDir}" STREQUAL "-1")
+    set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+endif("${isSystemDir}" STREQUAL "-1")
+#-----
+
 # Attempt to extract -std=c++XX from root-config --cflags, default to 20 if not found
 execute_process(
     COMMAND root-config --cflags
@@ -57,5 +78,34 @@ add_library(h2g_decode SHARED ${SRCS})
 include_directories(${ROOT_INCLUDE_DIRS})
 
 # Linker flags
-target_link_libraries(h2g_run ${ROOT_LIBRARIES})
-target_link_libraries(h2g_decode ${ROOT_LIBRARIES})
+target_link_libraries(h2g_run PUBLIC ${ROOT_LIBRARIES})
+target_include_directories(h2g_run INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src> $<INSTALL_INTERFACE:inc> )
+install( TARGETS h2g_run EXPORT h2g_decode DESTINATION ${CMAKE_INSTALL_PREFIX}/lib )
+
+target_link_libraries(h2g_decode PUBLIC ${ROOT_LIBRARIES})
+install( TARGETS h2g_decode EXPORT h2g_decode DESTINATION ${CMAKE_INSTALL_PREFIX}/lib )
+
+install( DIRECTORY src/ DESTINATION ${CMAKE_INSTALL_PREFIX}/inc FILES_MATCHING PATTERN "*.h" )
+
+install( EXPORT h2g_decode FILE h2g_decodeTargets.cmake NAMESPACE h2g_decode:: DESTINATION ${CMAKE_INSTALL_PREFIX} )
+set( h2g_decode_INSTALL_INCLUDE ${CMAKE_INSTALL_PREFIX}/inc )
+
+include(CMakePackageConfigHelpers)
+configure_package_config_file(cmake/h2g_decodeConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/h2g_decodeConfig.cmake
+  INSTALL_DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  PATH_VARS h2g_decode_INSTALL_INCLUDE
+  )
+
+#This will create the config version file needed by 'find_package'
+write_basic_package_version_file(
+    h2g_decodeConfigVersion.cmake
+    VERSION ${PACKAGE_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
+install( FILES "${CMAKE_CURRENT_BINARY_DIR}/h2g_decodeConfig.cmake"
+               "${CMAKE_CURRENT_BINARY_DIR}/h2g_decodeConfigVersion.cmake"
+         DESTINATION ${CMAKE_INSTALL_PREFIX}
+)
+
