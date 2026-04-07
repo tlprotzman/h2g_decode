@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 # Project name
-project(h2g_decode VERSION 0.13)
+project(H2G_Decode VERSION 0.13)
 
 #Path to cmake scripts
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
@@ -80,32 +80,33 @@ include_directories(${ROOT_INCLUDE_DIRS})
 # Linker flags
 target_link_libraries(h2g_run PUBLIC ${ROOT_LIBRARIES})
 target_include_directories(h2g_run INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src> $<INSTALL_INTERFACE:inc> )
-install( TARGETS h2g_run EXPORT h2g_decode DESTINATION ${CMAKE_INSTALL_PREFIX}/lib )
+install( TARGETS h2g_run EXPORT H2G_Decode DESTINATION ${CMAKE_INSTALL_PREFIX}/lib )
 
 target_link_libraries(h2g_decode PUBLIC ${ROOT_LIBRARIES})
-install( TARGETS h2g_decode EXPORT h2g_decode DESTINATION ${CMAKE_INSTALL_PREFIX}/lib )
+target_include_directories(h2g_decode INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src> $<INSTALL_INTERFACE:inc> )
+install( TARGETS h2g_decode EXPORT H2G_Decode DESTINATION ${CMAKE_INSTALL_PREFIX}/lib )
 
 install( DIRECTORY src/ DESTINATION ${CMAKE_INSTALL_PREFIX}/inc FILES_MATCHING PATTERN "*.h" )
 
-install( EXPORT h2g_decode FILE h2g_decodeTargets.cmake NAMESPACE h2g_decode:: DESTINATION ${CMAKE_INSTALL_PREFIX} )
-set( h2g_decode_INSTALL_INCLUDE ${CMAKE_INSTALL_PREFIX}/inc )
+install( EXPORT H2G_Decode FILE H2G_DecodeTargets.cmake NAMESPACE H2G_Decode:: DESTINATION ${CMAKE_INSTALL_PREFIX} )
+set( H2G_Decode_INSTALL_INCLUDE ${CMAKE_INSTALL_PREFIX}/inc )
 
 include(CMakePackageConfigHelpers)
-configure_package_config_file(cmake/h2g_decodeConfig.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/h2g_decodeConfig.cmake
+configure_package_config_file(cmake/H2G_DecodeConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/H2G_DecodeConfig.cmake
   INSTALL_DESTINATION "${CMAKE_INSTALL_PREFIX}"
-  PATH_VARS h2g_decode_INSTALL_INCLUDE
+  PATH_VARS H2G_Decode_INSTALL_INCLUDE
   )
 
 #This will create the config version file needed by 'find_package'
 write_basic_package_version_file(
-    h2g_decodeConfigVersion.cmake
+    H2G_DecodeConfigVersion.cmake
     VERSION ${PACKAGE_VERSION}
     COMPATIBILITY AnyNewerVersion
 )
 
-install( FILES "${CMAKE_CURRENT_BINARY_DIR}/h2g_decodeConfig.cmake"
-               "${CMAKE_CURRENT_BINARY_DIR}/h2g_decodeConfigVersion.cmake"
+install( FILES "${CMAKE_CURRENT_BINARY_DIR}/H2G_DecodeConfig.cmake"
+               "${CMAKE_CURRENT_BINARY_DIR}/H2G_DecodeConfigVersion.cmake"
          DESTINATION ${CMAKE_INSTALL_PREFIX}
 )
 
