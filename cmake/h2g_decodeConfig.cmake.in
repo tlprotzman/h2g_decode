@@ -1,0 +1,10 @@
+set( H2G_Decode_VERSION 0.13 )
+
+@PACKAGE_INIT@
+
+set_and_check( H2G_Decode_INSTALL_INCLUDE "@PACKAGE_H2G_Decode_INSTALL_INCLUDE@" )
+
+include( "${CMAKE_CURRENT_LIST_DIR}/H2G_DecodeTargets.cmake" )
+
+check_required_components(H2G_Decode)
+

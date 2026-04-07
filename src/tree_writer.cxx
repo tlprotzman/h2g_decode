@@ -16,11 +16,11 @@
 #include <TFile.h>
 #include <TTree.h>
 
-event_writer::event_writer(const std::string &file_name, int num_kcu, int num_samples, int detector) {
+event_writer::event_writer(const std::string &file_name, int num_kcu, int num_asic, int num_samples, int detector) {
     this->num_kcu = num_kcu;
     this->num_samples = num_samples;
     this->detector = detector;
-    num_channels = 144 * num_kcu;
+    num_channels = num_asic*72*num_kcu;
     event_number = 0;
     log_message(DEBUG_INFO, "TreeWriter", "Detector is " + std::to_string(detector));
 
@@ -160,8 +160,8 @@ bool event_writer::decode_position(int channel, int &x, int &y, int &z) {
         x = 3;
     }
 
-    int fpga = channel / 144;
-    int asic = (channel % 144) / 72;
+    int fpga = channel / (num_channels/num_kcu);
+    int asic = (channel % (num_channels/num_kcu)) / 72;
 
     z = fpga_factor[fpga] * 16 + asic * 8 + lhfcal_channel / 8;
 
@@ -169,10 +169,10 @@ bool event_writer::decode_position(int channel, int &x, int &y, int &z) {
 }
 
 void event_writer::write_event(aligned_event *event) {
-    log_message(DEBUG_TRACE, "TreeWriter", "Writing event: " + std::to_string((uint64_t)event));
+    log_message(DEBUG_INFO, "TreeWriter", "Writing event: " + std::to_string((uint64_t)event));
     for (int i = 0; i < num_kcu; i++) {
-        log_message(DEBUG_TRACE, "TreeWriter", std::to_string(i) + ": " + 
-                   std::to_string((uint64_t)event->get_event(i)));
+        log_message(DEBUG_INFO, "TreeWriter", std::to_string(i) + ": " + 
+                   std::to_string((uint64_t)event->get_event(i)) + "\t nChannels " + std::to_string((num_channels/num_kcu)));
     }
     event_values.event_number = event_number;
     event_values.num_samples = num_samples;
@@ -182,8 +182,8 @@ void event_writer::write_event(aligned_event *event) {
             auto e = event->get_event(i);
             event_values.timestamps[i] = e->get_timestamp();
             // hitwise quantities
-            for (int j = 0; j < 144; j++) {
-                int channel_index = i * 144 + j;
+            for (int j = 0; j < (num_channels/num_kcu); j++) {
+                int channel_index = i * (num_channels/num_kcu) + j;
                 event_values.hit_max[channel_index] = 0;
                 event_values.hit_pedestal[channel_index] = e->get_sample_adc(j, 0);
                 for (int k = 0; k < num_samples; k++) {
@@ -203,8 +203,8 @@ void event_writer::write_event(aligned_event *event) {
             auto e = event->get_event(i);
             event_values.timestamps[i] = e->get_timestamp();
             // hitwise quantities
-            for (int j = 0; j < 144; j++) {
-                int channel_index = i * 144 + j;
+            for (int j = 0; j < (num_channels/num_kcu); j++) {
+                int channel_index = i * (num_channels/num_kcu) + j;
                 auto x = 0, y = 0, z = 0;
                 // Correct Z for which KCU is used
                 bool good = decode_position(channel_index, x, y, z);
@@ -236,17 +236,18 @@ void event_writer::write_event(aligned_event *event) {
                 int channel_16p_index = 0;
                 event_values.hit_crystal[channel_16i_index] = crystal;
 
+                // here num_channels should be 144 to have geom working properly
                 if (sipm == 0) {
-                    channel_16p_index = fpga * 144 + asic * 72 + eeemcal_16p_channel_map[connector];
+                    channel_16p_index = fpga * (num_channels/num_kcu) + asic * 72 + eeemcal_16p_channel_map[connector];
                     event_values.good_channel_16p[channel_16p_index] = true;
                     event_values.hit_sipm_16p[channel_16i_index] = sipm;
                 }
                 if (sipm < 4) {
-                    channel_4x4_index = fpga * 144 + asic * 72 + eeemcal_4x4_channel_map[connector][sipm];
+                    channel_4x4_index = fpga * (num_channels/num_kcu) + asic * 72 + eeemcal_4x4_channel_map[connector][sipm];
                     event_values.good_channel_4x4[channel_4x4_index] = true;
                     event_values.hit_sipm_4x4[channel_16i_index] = sipm;
                 }
-                channel_16i_index = fpga * 144 + asic * 72 + eeemcal_16i_channel_map[connector][sipm];
+                channel_16i_index = fpga * (num_channels/num_kcu) + asic * 72 + eeemcal_16i_channel_map[connector][sipm];
                 event_values.good_channel_16i[channel_16i_index] = true;
                 event_values.hit_sipm_16i[channel_16i_index] = sipm;
                 
@@ -255,8 +256,8 @@ void event_writer::write_event(aligned_event *event) {
         for (int i = 0; i < num_kcu; i++) {
             auto e = event->get_event(i);
             event_values.timestamps[i] = e->get_timestamp();
-            for (int j = 0; j < 144; j++) {
-                int channel_index = i * 144 + j;
+            for (int j = 0; j < (num_channels/num_kcu); j++) {
+                int channel_index = i * (num_channels/num_kcu) + j;
                 event_values.hit_max[channel_index] = 0;
                 event_values.hit_pedestal[channel_index] = e->get_sample_adc(j, 0);
                 for (int k = 0; k < num_samples; k++) {

@@ -4,8 +4,9 @@
 #include <sstream>
 #include <cstdint>
 
-file_stream::file_stream(const char *fname, uint32_t num_fpgas) {
+file_stream::file_stream(const char *fname, uint32_t num_fpgas, uint32_t num_asics) {
     this->num_fpgas = num_fpgas;
+    this->jumbo_frames = false;
 
     log_message(DEBUG_INFO, "FileStream", "Initializing with " + std::to_string(num_fpgas) + " FPGAs");
     log_message(DEBUG_INFO, "FileStream", "Attempting to open file " + std::string(fname));
@@ -40,12 +41,88 @@ file_stream::file_stream(const char *fname, uint32_t num_fpgas) {
                 }
             }
         }
-        if (line.find("##################################################") != std::string::npos) {
+        else if (line.find("# Number of KCUs:") != std::string::npos) {
+            std::istringstream iss(line);
+            std::string token;
+            while (std::getline(iss, token, ' ')) {
+                if (token.find("KCUs:") != std::string::npos) {
+                    std::getline(iss, token, ' ');
+                    uint32_t tempKCUs = std::stoi(token);
+                    if (tempKCUs != num_fpgas){
+                        log_message(DEBUG_ERROR, "FileStream", "WRONG number of FPGAs configured " + std::to_string(num_fpgas) + " correct number " + std::to_string(tempKCUs));
+                        throw std::runtime_error("Incorrect number of FPGAs configured");
+                    }    
+                }
+            }
+        }
+        else if (line.find("# Number of ASICs:") != std::string::npos) {
+            std::istringstream iss(line);
+            std::string token;
+            while (std::getline(iss, token, ' ')) {
+                if (token.find("ASICs:") != std::string::npos) {
+                    std::getline(iss, token, ' ');
+                    uint32_t tempAsics = std::stoi(token);
+                    if (tempAsics != num_asics){
+                        log_message(DEBUG_ERROR, "FileStream", "WRONG number of ASICs configured:  " + std::to_string(num_asics) + " correct number " + std::to_string(tempAsics));
+                        throw std::runtime_error("Incorrect number of ASICs configured.");
+                    }
+                }
+            }
+        }  
+        else if (line.find("# File Version:") != std::string::npos) {
+            std::istringstream iss(line);
+            std::string token;
+            while (std::getline(iss, token, ' ')) {
+                if (token.find("Version:") != std::string::npos) {
+                    std::string version_token;
+                    if (iss >> version_token) {
+                        try {
+                            auto dot = version_token.find('.');
+                            if (dot != std::string::npos) {
+                                format_major = std::stoi(version_token.substr(0, dot));
+                                format_minor = std::stoi(version_token.substr(dot + 1));
+                            } else {
+                                format_major = std::stoi(version_token);
+                                format_minor = 0;
+                            }
+                            log_message(DEBUG_INFO, "FileStream", "File format version: " +
+                                        std::to_string(format_major) + "." + std::to_string(format_minor));
+                        } catch (const std::exception &e) {
+                            log_message(DEBUG_ERROR, "FileStream", std::string("Failed to parse file version: ") + e.what());
+                        }
+                    }
+                }
+            }
+        }
+        else if (line.find("# Generator Setting jumbo_enable:") != std::string::npos) {
+            std::istringstream iss(line);
+            std::string token;
+            while (std::getline(iss, token, ' ')) {
+                if (token.find("jumbo_enable:") != std::string::npos) {
+                    std::getline(iss, token, ' ');
+                    jumbo_frames = (std::stoi(token) != 0);
+                    log_message(DEBUG_INFO, "FileStream", "Jumbo frames: " + std::string(jumbo_frames ? "enabled" : "disabled"));
+                }
+            }
+        }
+        
+        
+        
+        
+        else if (line.find("##################################################") != std::string::npos) {
             hashline_count++;
             log_message(DEBUG_DEBUG, "FileStream", "Found delimiter line " + std::to_string(hashline_count) + "/2");
         }
     }
     
+    if (this->format_major == 0 && this->format_minor <= 12) {
+        packet_size = 1452;
+    } else if (this->jumbo_frames) {
+        packet_size = 8846;
+    } else {
+        packet_size = 1358;
+    }
+
     current_head = file.tellg();
     log_message(DEBUG_INFO, "FileStream", "Starting at byte " + std::to_string(static_cast<long long>(current_head)));
     
@@ -68,7 +145,6 @@ file_stream::~file_stream() {
 }
 
 int file_stream::read_packet(uint8_t *buffer) {
-    uint32_t packet_size = 1452;
     // Check if PACKET_SIZE bytes are available to read
     file.seekg(0, std::ios::end);
     if (file.tellg() - current_head < packet_size) {
@@ -83,9 +159,10 @@ int file_stream::read_packet(uint8_t *buffer) {
     file.read(reinterpret_cast<char*>(buffer), packet_size);;
     current_head = file.tellg();
 
-    if ((float)current_head / (float)end > current_percent + 0.0001) {
+    // print if percentage increase by 0.5%
+    if ((float)current_head / (float)end > current_percent + 0.005) {
         current_percent = (float)current_head / (float)end;
-        log_message(DEBUG_DEBUG, "\rFILE STREAM: " + std::to_string((int)(100 * (float) current_head / (float)end)) + "% complete");
+        log_message(DEBUG_INFO, "\rFILE STREAM: " + std::to_string((float)(100 * (float) current_head / (float)end)) + "% complete");
     }
 
     // Check if the read was successful
