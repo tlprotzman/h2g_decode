@@ -20,8 +20,10 @@ private:
     int format_minor;
     int packet_size;
     bool jumbo_frames;
+    bool extTrig;
     
     uint32_t num_fpgas;
+    uint32_t num_active_asics;
 
 public:
     file_stream(const char *fname, uint32_t num_fpgas, uint32_t num_asics);
@@ -35,5 +37,7 @@ public:
     int get_format_major() {return format_major;}
     int get_format_minor() {return format_minor;}
     int get_number_samples() {return number_samples;}
+    int get_active_asics() {return num_active_asics;}
     int get_packet_size() {return packet_size;}
+    bool get_triggType() {return extTrig;}
 };

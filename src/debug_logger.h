@@ -71,3 +71,6 @@ void log_message(int level, const std::string& message);
 
 // Global function to log a message with a component prefix
 void log_message(int level, const std::string& component, const std::string& message);
+
+// Global function to get debug level
+int get_debug_level();

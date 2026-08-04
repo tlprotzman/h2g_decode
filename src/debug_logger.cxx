@@ -113,3 +113,8 @@ void log_message(int level, const std::string& component, const std::string& mes
     // Restore the previous component prefix
     DebugLogger::getInstance()->setComponentPrefix(previousPrefix);
 }
+
+// Global function to log a message with a component prefix
+int get_debug_level() {
+    return DebugLogger::getInstance()->getLevel();
+}

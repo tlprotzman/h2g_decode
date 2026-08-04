@@ -39,7 +39,8 @@ class hgc_decoder {
         const int DETECTOR_ID;
         int NUM_SAMPLES;
         int debug_level;
-
+        bool extTrig;
+        
         // decoder modules
         stat_logger *logger;
         file_stream *fs;
@@ -71,8 +72,12 @@ class hgc_decoder {
         bool process_v013_packet();
 
         long num_proc_events;       // total number of events build
+        long last_trig;
         long last_trig_Int;
         long last_trig_Out;
+        
+        int sinceLastAligned = 0;
+        
     public:
         hgc_decoder(const char *file_name, const int detector_id, const int num_kcu, const int num_asic, const int debug_level = 0, bool adc_truncation=false);
         ~hgc_decoder();

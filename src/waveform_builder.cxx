@@ -7,10 +7,11 @@
 #include <iostream>
 #include <list>
 
-kcu_event::kcu_event(uint32_t fpga, uint32_t num_asics, uint32_t samples) {
-    this->fpga = fpga;
-    this->num_asics = num_asics;
-    this->samples = samples;
+kcu_event::kcu_event(uint32_t fpga, uint32_t num_asics, uint32_t samples, uint32_t active_asics) {
+    this->fpga          = fpga;
+    this->num_asics     = num_asics;
+    this->samples       = samples;
+    this->active_asics  = active_asics;
     found = 0;
     added = 0;
     bunch_counter = new uint32_t[samples];
@@ -31,6 +32,7 @@ kcu_event::kcu_event(uint32_t fpga, uint32_t num_asics, uint32_t samples) {
     }
     unwrapped = false;
     aligned = false;
+    skipped = 0;
 }
 
 kcu_event::~kcu_event() {
@@ -61,7 +63,9 @@ kcu_event::~kcu_event() {
 }
 
 bool kcu_event::is_complete() {
-    return added == samples * num_asics * 2;
+  // std::cout << "current " << added << "\t" << samples*active_asics*2 << std::endl;
+  return added == samples*active_asics*2;
+    // return added == samples * num_asics * 2;
 }
 
 bool kcu_event::is_ordered() {
@@ -81,11 +85,12 @@ bool kcu_event::is_ordered() {
     return in_order;
 }
 
-waveform_builder::waveform_builder(uint32_t fpga_id, uint32_t num_asics, uint32_t num_samples) {
-    this->fpga_id = fpga_id;
-    this->num_asics = num_asics;
-    this->num_samples = num_samples;
-
+waveform_builder::waveform_builder(uint32_t fpga_id, uint32_t num_asics, uint32_t num_samples, uint32_t num_active) {
+    this->fpga_id       = fpga_id;
+    this->num_asics     = num_asics;
+    this->num_samples   = num_samples;
+    this->active_asics  = num_active;
+    
     attempted = 0;
     aborted = 0;
     completed = 0;
@@ -250,7 +255,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
             auto offset = 72 * s->asic + 36 * s->half;
             // Create a new kcu_event
             // std::cout << "Creating new event with timestamp " << s->timestamp << ", offset " << offset << ", and event number " << s->event_counter << std::endl;
-            auto event = new kcu_event(fpga_id, num_asics, num_samples);
+            auto event = new kcu_event(fpga_id, num_asics, num_samples, active_asics);
             attempted++;
             for (int j = 0; j < 36; j++) {
                 event->adc[j + offset][0] = s->adc[j];
@@ -433,9 +438,14 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
         if (!found_event) {
             log_message(DEBUG_TRACE, "WaveformBuilder", "\t- Did not find existing event, making new event for FPGA " + std::to_string(fpga_id) + " .");
             log_message(DEBUG_TRACE, "WaveformBuilder", "\t trigger: " + std::to_string(sample->trigger_counter_Int) + " " + std::to_string(sample->trigger_counter_Ext) +  "\t Sample " + std::to_string(0) + " sample counter: " + std::to_string(sample->sample_counter) + " \t time stamp: " + std::to_string(sample->timestamp) );
-            auto event                = new kcu_event(fpga_id, num_asics, num_samples);
+            auto event                = new kcu_event(fpga_id, num_asics, num_samples, active_asics);
             event->trigger_counter_Int= sample->trigger_counter_Int;      // set trigger counter internal
             event->trigger_counter_Ext= sample->trigger_counter_Ext;      // set trigger counter external
+            // set global counter for simplification 
+            if (is_ext_trigg)
+              event->trigger_counter  = sample->trigger_counter_Ext;      // set trigger counter external
+            else 
+              event->trigger_counter  = sample->trigger_counter_Int;      // set trigger counter internal ( internal counter reset to 0, if external disabled)
             event->timestamp[0]       = sample->timestamp;                // set actual time stamp
             event->samples_counter[0] = sample->sample_counter;           // set sample counter
             event->found              = 1;                                // Number of samples found (i.e. 1 through n_samples)
@@ -539,4 +549,49 @@ void waveform_builder::drop_first( int nEvt){
         
 }
 
+void waveform_builder::drop_exact( int trigCountInt, int trigCountExt ){
+  bool found = false;
+  auto event_itr  = complete->begin();
+  // iterate through completed array to remove exact events
+  while (!found && event_itr!=complete->end()){
+      if (  ((*event_itr)->trigger_counter_Int == trigCountInt) && 
+            ((*event_itr)->trigger_counter_Ext == trigCountExt) ){
+          found = true;
+          auto evt = *event_itr;
+          delete evt;
+          complete->erase(event_itr);
+      } else {
+          ++event_itr;
+      }
+  }        
+}
 
+void waveform_builder::set_skipped_for_event( int trigCountInt, int trigCountExt ){
+  bool found = false;
+  auto event_itr  = complete->begin();
+  // iterate through completed array to remove exact events
+  while (!found && event_itr!=complete->end()){
+      if (  ((*event_itr)->trigger_counter_Int == trigCountInt) && 
+            ((*event_itr)->trigger_counter_Ext == trigCountExt) ){
+          (*event_itr)->is_skipped();
+          found=true;
+      } else {
+          ++event_itr;
+      }
+  }        
+}
+
+void waveform_builder::set_aligned_for_event( int trigCountInt, int trigCountExt ){
+  bool found = false;
+  auto event_itr  = complete->begin();
+  // iterate through completed array to remove exact events
+  while (!found && event_itr!=complete->end()){
+      if (  ((*event_itr)->trigger_counter_Int == trigCountInt) && 
+            ((*event_itr)->trigger_counter_Ext == trigCountExt) ){
+          (*event_itr)->is_aligned();
+          found=true;
+      } else {
+          ++event_itr;
+      }
+  }        
+}

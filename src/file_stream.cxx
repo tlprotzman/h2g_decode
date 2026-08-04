@@ -2,12 +2,14 @@
 
 #include <istream>
 #include <sstream>
+#include <cmath>
 #include <cstdint>
 
 file_stream::file_stream(const char *fname, uint32_t num_fpgas, uint32_t num_asics) {
-    this->num_fpgas = num_fpgas;
-    this->jumbo_frames = false;
-
+    this->num_fpgas     = num_fpgas;
+    this->jumbo_frames  = false;
+    this->extTrig       = false;
+    
     log_message(DEBUG_INFO, "FileStream", "Initializing with " + std::to_string(num_fpgas) + " FPGAs");
     log_message(DEBUG_INFO, "FileStream", "Attempting to open file " + std::string(fname));
     
@@ -68,7 +70,33 @@ file_stream::file_stream(const char *fname, uint32_t num_fpgas, uint32_t num_asi
                     }
                 }
             }
-        }  
+        } 
+        else if (line.find("# Generator Setting data_coll_enable:") != std::string::npos) {
+            std::istringstream iss(line);
+            std::string token;
+            while (std::getline(iss, token, ' ')) {
+                if (token.find("enable:") != std::string::npos) {
+                    std::getline(iss, token, ' ');
+                    uint32_t dataEnable = std::stoi(token);
+                    uint32_t active     = 0;
+                    uint32_t maxActive  = 0;
+                    for ( uint32_t b = 0; b< 8; b++){
+                      uint32_t toBeChecked = std::pow(2.,b);
+                      if (dataEnable&toBeChecked){
+                        active++;
+                        maxActive=b;
+                      }
+                    }
+                    maxActive++;
+                    this->num_active_asics=active;
+                    std::cout << "Setting data enabled"<< dataEnable << "\t"<< active << "\t" << maxActive <<std::endl;
+                    if (maxActive != num_asics){
+                        log_message(DEBUG_ERROR, "FileStream", "Maximum number of Asics incorrect configured " + std::to_string(num_asics) + " correct number " + std::to_string(maxActive));
+                        throw std::runtime_error("Incorrect number of FPGAs configured, readout max different from data enabled");
+                    }    
+                }
+            }
+        }
         else if (line.find("# File Version:") != std::string::npos) {
             std::istringstream iss(line);
             std::string token;
@@ -105,10 +133,20 @@ file_stream::file_stream(const char *fname, uint32_t num_fpgas, uint32_t num_asi
                 }
             }
         }
-        
-        
-        
-        
+        else if (line.find("# Generator Setting ext_trig_enable:") != std::string::npos) {
+            std::istringstream iss(line);
+            std::string token;
+            while (std::getline(iss, token, ' ')) {
+                if (token.find("ext_trig_enable:") != std::string::npos) {
+                    std::getline(iss, token, ' ');
+                    extTrig = (std::stoi(token) != 0);
+                    log_message(DEBUG_INFO, "FileStream", "Ext triggers: " + std::string(extTrig ? "enabled" : "disabled"));
+                    if (this->format_major == 0 && this->format_minor > 12){
+                      log_message(DEBUG_INFO, "FileStream", "\t" + std::string(extTrig ? "will be discarding events with changing internal trigger" : "will be discarding events with changing external trigger"));
+                    }
+                }
+            }
+        }
         else if (line.find("##################################################") != std::string::npos) {
             hashline_count++;
             log_message(DEBUG_DEBUG, "FileStream", "Found delimiter line " + std::to_string(hashline_count) + "/2");

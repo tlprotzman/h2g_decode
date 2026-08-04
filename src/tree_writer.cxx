@@ -25,7 +25,7 @@ event_writer::event_writer(const std::string &file_name, int num_kcu, int num_as
     log_message(DEBUG_INFO, "TreeWriter", "Detector is " + std::to_string(detector));
 
     log_message(DEBUG_DEBUG, "TreeWriter", "Making event writer with " + std::to_string(num_kcu) + 
-               " KCUs, " + std::to_string(num_samples) + " samples, and " + 
+               " FPGAs, " + std::to_string(num_samples) + " samples, and " + 
                std::to_string(num_channels) + " channels");
 
     this->file_name = file_name;
@@ -177,10 +177,13 @@ void event_writer::write_event(aligned_event *event) {
     event_values.event_number = event_number;
     event_values.num_samples = num_samples;
     event_number++;
+    
+    // generic
     if (detector == 0) { // just write values, don't match to geometry or anything fancy
         for (int i = 0; i < num_kcu; i++) {
             auto e = event->get_event(i);
             event_values.timestamps[i] = e->get_timestamp();
+            log_message(DEBUG_INFO, "TreeWriter", std::to_string(i) + "- trigg count int:" + std::to_string(e->get_trigger_counter_Int()) + "- trigg count ext:" + std::to_string(e->get_trigger_counter_Ext()) + "\t timestamp:" +std::to_string(e->get_timestamp()));
             // hitwise quantities
             for (int j = 0; j < (num_channels/num_kcu); j++) {
                 int channel_index = i * (num_channels/num_kcu) + j;
@@ -198,10 +201,13 @@ void event_writer::write_event(aligned_event *event) {
             }
         }
     }
+    // LFHCal
     else if (detector == 1) {
         for (int i = 0; i < num_kcu; i++) {
             auto e = event->get_event(i);
             event_values.timestamps[i] = e->get_timestamp();
+            log_message(DEBUG_INFO, "TreeWriter", std::to_string(i) + "- trigg count int:" + std::to_string(e->get_trigger_counter_Int()) + "- trigg count ext:" + std::to_string(e->get_trigger_counter_Ext()) + "\t timestamp:" +std::to_string(e->get_timestamp()));
+            
             // hitwise quantities
             for (int j = 0; j < (num_channels/num_kcu); j++) {
                 int channel_index = i * (num_channels/num_kcu) + j;
@@ -225,6 +231,7 @@ void event_writer::write_event(aligned_event *event) {
                 }
             }
         }
+    // EEEMC
     } else if (detector == 2) {
         for (int crystal = 0; crystal < 25; crystal++) {
             for (int sipm = 0; sipm < 16; sipm++) {

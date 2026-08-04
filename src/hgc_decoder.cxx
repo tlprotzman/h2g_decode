@@ -159,7 +159,7 @@ hgc_decoder::hgc_decoder( const char *file_name,
         num_disWbs[i]  = 0;
         num_progWbs[i] = 0;
         // Initialize waveform builder for all KCUs
-        wbs.push_back(new waveform_builder(i, NUM_ASIC, NUM_SAMPLES));
+        wbs.push_back(new waveform_builder(i, NUM_ASIC, NUM_SAMPLES, fs->get_active_asics()));
     }
     // Initialize event aligner
     aligner           = new event_aligner(NUM_KCU);
@@ -168,8 +168,10 @@ hgc_decoder::hgc_decoder( const char *file_name,
     aligned_buffer    = new std::list<aligned_event*>();
     
     num_proc_events   = 0;      // counter for fully build events
+    last_trig         = -1;     // last internal trigger counter for aligned event
     last_trig_Int     = -1;     // last internal trigger counter for aligned event
     last_trig_Out     = -1;     // last external trigger counter for aligned event
+    extTrig           = false;
 }
 
 
@@ -236,6 +238,7 @@ bool hgc_decoder::process_v013_packet() {
     // Try to build waveform for a single KCU out of the individual 
     // -------------------------------------------------------------------
     for (int i = 0; i < NUM_KCU; i++) {
+        if(extTrig) wbs[i]->set_is_ext_trigg();
         wbs[i]->build_v013(lb->get_completed(i));
     }
     // -------------------------------------------------------------------
@@ -252,8 +255,8 @@ bool hgc_decoder::process_v013_packet() {
         single_kcu_events[i] = wbs[i]->get_complete();
         // check if a new full waveform has been build
         if ( num_fullcWbs[i] < (long)single_kcu_events[i]->size()){
-          log_message(DEBUG_INFO, "Found " + std::to_string(wbs[i]->get_num_completed()) + "/" + std::to_string(wbs[i]->get_num_attempted()) +  " attempted waveforms delta "+  std::to_string(wbs[i]->get_num_attempted()-wbs[i]->get_num_completed()) +" for KCU " + std::to_string(i) );
-          log_message(DEBUG_INFO, "To be processed " + std::to_string(single_kcu_events[i]->size())+" for KCU " + std::to_string(i) );
+          log_message(DEBUG_INFO, "Found " + std::to_string(wbs[i]->get_num_completed()) + "/" + std::to_string(wbs[i]->get_num_attempted()) +  " attempted waveforms delta "+  std::to_string(wbs[i]->get_num_attempted()-wbs[i]->get_num_completed()) +" for FPGA " + std::to_string(i) );
+          log_message(DEBUG_INFO, "To be processed " + std::to_string(single_kcu_events[i]->size())+" for FPGA " + std::to_string(i) );
           if (wbs[i]->get_num_in_progress() > 1){
             wbs[i]->print_in_progress();
           }
@@ -269,12 +272,81 @@ bool hgc_decoder::process_v013_packet() {
     // Try to align the events from different KCUs
     // -------------------------------------------------------------------
     if (updatedWbs){
-        aligner->align_v013(single_kcu_events, NUM_ASIC, last_trig_Int, last_trig_Out);
-        aligned_buffer        = aligner->get_complete();
-        if (aligned_buffer->size() > 0 ) {
-            heartbeat_counter = 0;
-            num_proc_events = num_proc_events+(long)aligned_buffer->size();
-            log_message(DEBUG_INFO, "Found total " + std::to_string(num_proc_events) + " aligned events, added  " + std::to_string((long)aligned_buffer->size()));
+        // check whether all KCU pools are large enough
+        bool startBuild = true;
+        for (int i = 0; i < NUM_KCU; i++) {
+          if (num_fullcWbs[i] < 3) startBuild = false;
+        }
+        if (startBuild){
+          aligner->align_v013(single_kcu_events, NUM_ASIC, last_trig, last_trig_Int, last_trig_Out);
+          aligned_buffer        = aligner->get_complete();
+          if (aligned_buffer->size() > 0 ) {
+              heartbeat_counter = 0;
+              num_proc_events = num_proc_events+(long)aligned_buffer->size();
+              log_message(DEBUG_INFO, "Found total " + std::to_string(num_proc_events) + " aligned events, added  " + std::to_string((long)aligned_buffer->size()));
+              sinceLastAligned = 0;
+          } else {
+            sinceLastAligned++;
+          }
+          // cleaning
+          for (int i = 0; i < NUM_KCU; i++) {
+            if (single_kcu_events[i]->size() == 0){
+              continue;
+            } 
+            // clean the buffers as alignment went wrong the last 20 events, except last event filled in both all buffers
+            if (sinceLastAligned == 20){
+              log_message(DEBUG_INFO, "\t\t\t\t<<<<<<<<<<<<<<<<=======>>>>>>>>>>>>>>");
+              log_message(DEBUG_INFO, "\t\t\t\tReset of buffer for " + std::to_string(i));
+              log_message(DEBUG_INFO, "\t\t\t\t<<<<<<<<<<<<<<<<=======>>>>>>>>>>>>>>");
+              wbs[i]->drop_first(num_fullcWbs[i]-1);
+              num_fullcWbs[i]= 1;
+              continue;
+            }
+            log_message(DEBUG_INFO, "Analyzing return events from FPGA: " + std::to_string(i));
+            std::list<kcu_event*>::iterator current_it = single_kcu_events[i]->begin();
+            int nAligned = 0;
+            while(current_it != single_kcu_events[i]->end()){
+              // // check is an aligned event has been set & remove from completed list
+              if((*current_it)->get_aligned()){
+                nAligned++;
+                log_message(DEBUG_INFO, "Found aligned event " + std::to_string((*current_it)->get_trigger_counter_Int() ) +"\t" 
+                                                              + std::to_string((*current_it)->get_trigger_counter_Ext()));
+                wbs[i]->set_aligned_for_event((*current_it)->get_trigger_counter_Int(), (*current_it)->get_trigger_counter_Ext());
+              }
+              
+              if((*current_it)->get_skipped() > 0){
+                log_message(DEBUG_INFO, "Found skipped event skipped "+ std::to_string((*current_it)->get_skipped()) +"\t times ----> \t event nr." 
+                                                              + std::to_string((*current_it)->get_trigger_counter_Int() ) +"\t" 
+                                                              + std::to_string((*current_it)->get_trigger_counter_Ext()));
+                wbs[i]->set_skipped_for_event((*current_it)->get_trigger_counter_Int(), (*current_it)->get_trigger_counter_Ext());
+                // clean single waveform if we are continuously failing to align
+                int allowed_alignment_failures = 3;
+                if ((*current_it)->get_skipped() > allowed_alignment_failures && !(*current_it)->get_aligned()) { 
+                  log_message(DEBUG_INFO, "\t\t\t\t=======> cleaning event ");
+                  wbs[i]->drop_exact((*current_it)->get_trigger_counter_Int(), (*current_it)->get_trigger_counter_Ext());
+                  num_fullcWbs[i]--;
+                }
+              }
+
+              // iterate through array
+              ++current_it;
+            }
+            int eventsToBeRemoved = 3;
+            if (nAligned > eventsToBeRemoved*2){
+              std::list<kcu_event*>::iterator current_it2 = single_kcu_events[i]->begin();
+              int evtRm = 0;
+              log_message(DEBUG_INFO, "\t\t\t\t=======> removing first " + std::to_string(eventsToBeRemoved) + " aligned events ");
+              while(current_it2 != single_kcu_events[i]->end() && evtRm < eventsToBeRemoved){
+                if((*current_it2)->get_aligned()){
+                  wbs[i]->drop_exact((*current_it2)->get_trigger_counter_Int(), (*current_it2)->get_trigger_counter_Ext());
+                  num_fullcWbs[i]--;
+                  evtRm++;
+                }
+                // iterate through array
+                ++current_it2;
+              }
+            }
+          }
         }
     }
     // -------------------------------------------------------------------
@@ -299,6 +371,9 @@ bool hgc_decoder::get_next_events() {
         if (fs->get_format_major() == 0 && fs->get_format_minor() <= 12) {
             return process_v012_packet();
         } else if (fs->get_format_major() == 0 && fs->get_format_minor() >= 13) {
+            // set trigger type for new file format
+            if (fs->get_triggType() != extTrig) 
+                extTrig = fs->get_triggType();
             return process_v013_packet();
         } else {
             log_message(DEBUG_ERROR, "Unsupported file format version: " + 

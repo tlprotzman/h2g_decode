@@ -202,12 +202,13 @@ bool line_builder::process_packet_v013(uint8_t *packet, int packet_size) {
           if (packet[decode_ptr] != 0x00){
             log_message(DEBUG_ERROR, "LineBuilder", "Invalid packet for FPGA ID: " );
             std::cerr << "Invalid data pack! " << std::endl;
-            for (int i = 0; i < 200/8; i++){
-              for (int j = 0; j < 8; j++){
-                std::cerr << std::hex <<int(packet[decode_ptr + i*8+j]) << "\t" ;
-              }
-              std::cerr << std::endl;  
-            }
+            // COMMENT this back in in case you wanna see the broken packet
+            // for (int i = 0; i < 200/8; i++){
+            //   for (int j = 0; j < 8; j++){
+            //     std::cerr << std::hex <<int(packet[decode_ptr + i*8+j]) << "\t" ;
+            //   }
+            //   std::cerr << std::endl;  
+            // }
           }
           decode_ptr=decode_ptr+sizeDP;
           nDP = nDPMax; // jump over entire packet 
