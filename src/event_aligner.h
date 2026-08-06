@@ -38,6 +38,7 @@ private:
     std::map<int,int> counterOffsetInt;
     std::map<int,int> counterOffsetExt;
     std::map<int,int> counterOffset;
+    int nResetOffsets                     = 0;
     std::list<aligned_event*> *complete;
 
 public:
@@ -48,6 +49,10 @@ public:
     std::list<aligned_event*> *get_complete() {return complete;}
     void clear_complete() {complete->clear();}
     void PrintBasicEventInfo(std::list<kcu_event*>::iterator, int fpgaID,  int opt = 0, int lastTrig = -1);
+    void PrintDetailedFPGADiff( std::vector<long> timeStampDeltas, std::vector<long> triggerCounts );
+
+    int GetNResetOffsets() {return nResetOffsets;}
+    
     std::list<kcu_event*>::iterator MoveForwardToLastBuildEvent ( int &status, std::list<kcu_event*> *fpgaList, int fpgaID, int trigToSelect_Int, int trigToSelect_Ext);
 };
 

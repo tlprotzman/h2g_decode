@@ -10,21 +10,28 @@ Collects individual samples built by line_builder and builds waveforms from them
 #include <list>
 #include <vector>
 
+//*********************************************************************************
+// kcu_event class definition contains information of events per KCU
+//*********************************************************************************
 class kcu_event {
 private:
+    // setup variables
     uint32_t fpga;
     uint32_t num_asics;
     uint32_t active_asics;
     uint32_t samples;
-    uint32_t found;
-    uint32_t added;
+    // monitoring samples per FPGA 
+    uint32_t found              = 0;
+    uint32_t added              = 0;
 
+    // arrays of per sample counters
     uint32_t *bunch_counter;
     uint32_t *event_counter;
     uint32_t *orbit_counter;
     uint64_t *timestamp;
     uint32_t *samples_counter;
     short *fill_counter;
+    // trigger counter (unique combination trigger_counter_Int & trigger_counter_Ext) use trigger_counter for simplified alignment
     uint32_t trigger_counter_Int;
     uint32_t trigger_counter_Ext;
     uint32_t trigger_counter;
@@ -34,23 +41,29 @@ private:
     long unwrapped_event_number = 0;
     bool unwrapped              = false;
 
+    // has the event already been aligned?
     bool aligned                = false;
-    int skipped                 = 0;            // how often was this KCU event skipped in alignment attempts
-    bool done                   = false;            
-
+    // how often was this FPGA event skipped in alignment attempts
+    int skipped                 = 0;   
+    
+    // full arrays of individual channel values for all samples
     uint32_t **adc;
     uint32_t **toa;
     uint32_t **tot;
     uint32_t **hamming;
 
 public:
-    kcu_event(uint32_t fpga, uint32_t num_asics, uint32_t samples, uint32_t active_asics);
+    // constructor & destructor
+    kcu_event(  uint32_t fpga, 
+                uint32_t num_asics, 
+                uint32_t samples, 
+                uint32_t active_asics
+              );
     ~kcu_event();
 
     bool is_complete();
     bool is_ordered();
     void is_aligned() {aligned = true;}
-    void is_done()    {done = true;}
     void is_skipped() {skipped++;}
     long get_event_number() {return unwrapped_event_number;}
     long get_timestamp() {return (long)timestamp[0];}
@@ -71,6 +84,9 @@ public:
     friend class waveform_builder;
 };
 
+//*********************************************************************************
+// waveform_builder class definition
+//*********************************************************************************
 class waveform_builder {
 private:
     uint32_t fpga_id;
