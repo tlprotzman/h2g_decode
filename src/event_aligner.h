@@ -37,14 +37,22 @@ private:
     uint32_t num_fpga;
     std::map<int,int> counterOffsetInt;
     std::map<int,int> counterOffsetExt;
+    std::map<int,int> counterOffset;
+    int nResetOffsets                     = 0;
     std::list<aligned_event*> *complete;
 
 public:
     event_aligner(uint32_t num_fpga);
     ~event_aligner();
     bool align(std::list<kcu_event*> **single_kcu_events);
-    bool align_v013(std::list<kcu_event*> **single_kcu_events, int num_asic, long &last_trig_Int, long &last_trig_Ext );
+    bool align_v013(std::list<kcu_event*> **single_kcu_events, int num_asic, long &last_trig, long &last_trig_Int, long &last_trig_Ext  );
     std::list<aligned_event*> *get_complete() {return complete;}
     void clear_complete() {complete->clear();}
+    void PrintBasicEventInfo(std::list<kcu_event*>::iterator, int fpgaID,  int opt = 0, int lastTrig = -1);
+    void PrintDetailedFPGADiff( std::vector<long> timeStampDeltas, std::vector<long> triggerCounts );
+
+    int GetNResetOffsets() {return nResetOffsets;}
+    
+    std::list<kcu_event*>::iterator MoveForwardToLastBuildEvent ( int &status, std::list<kcu_event*> *fpgaList, int fpgaID, int trigToSelect_Int, int trigToSelect_Ext);
 };
 
