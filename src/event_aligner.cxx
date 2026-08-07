@@ -458,6 +458,9 @@ bool event_aligner::align_v013( std::list<kcu_event*> **single_kcu_events,  // l
       // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
       if (  max_range_Tr < 1e-5  &&                             // primarily align for trigger counter
             std::abs(max_range) < 20.) {                        // don't let the trigger time difference become too large
+          std::vector<long> next_offSets;
+          std::vector<long> next_offSets_Int;
+          std::vector<long> next_offSets_Ext;
               
           //----------------------------------------------------------------------------------------------------------------
           // check that for first aligned event all offset are correctly set (primary trigger counter offset already matched)
@@ -486,14 +489,11 @@ bool event_aligner::align_v013( std::list<kcu_event*> **single_kcu_events,  // l
               temp_next_Triggs.push_back(next_Triggs[i]+counterOffset[i]);
               temp_next_Triggs_Int.push_back(next_Triggs_Int[i]+counterOffsetInt[i]);
               temp_next_Triggs_Ext.push_back(next_Triggs_Ext[i]+counterOffsetExt[i]);
-            }
-            
+            }   
             for (uint32_t i = 0; i < num_fpga; i++) {
-                counterOffset[i]    = temp_next_Triggs[i] - temp_next_Triggs[0];
-                counterOffsetInt[i] = temp_next_Triggs_Int[i] - temp_next_Triggs_Int[0];
-                counterOffsetExt[i] = temp_next_Triggs_Ext[i] - temp_next_Triggs_Ext[0];
-                log_message(DEBUG_INFO, "EventAligner", "\t FPGA: " + std::to_string(i) + "\t counterOffsets reset to " + std::to_string(counterOffset[i]) + "\t" + std::to_string(counterOffsetInt[i]) + "\t" + std::to_string(counterOffsetExt[i]));
-                nResetOffsets++;
+              next_offSets.push_back(temp_next_Triggs[i] - temp_next_Triggs[0]);
+              next_offSets_Int.push_back(temp_next_Triggs_Int[i] - temp_next_Triggs_Int[0]);
+              next_offSets_Ext.push_back(temp_next_Triggs_Ext[i] - temp_next_Triggs_Ext[0]);
             }            
           }
           
@@ -518,6 +518,16 @@ bool event_aligner::align_v013( std::list<kcu_event*> **single_kcu_events,  // l
           }
           // skip to ahead to next event if already build, restart of while loop
           if (alreadyAligned){
+            // check whether the next triggers are off, reset otherwise
+            if (next_offSets.size() > 0){
+              for (uint32_t i = 0; i < num_fpga; i++) {
+                counterOffset[i]    = next_offSets[i];
+                counterOffsetInt[i] = next_offSets_Int[i];
+                counterOffsetExt[i] = next_offSets_Ext[i];;
+                log_message(DEBUG_INFO, "EventAligner", "\t FPGA: " + std::to_string(i) + "\t counterOffsets reset to " + std::to_string(counterOffset[i]) + "\t" + std::to_string(counterOffsetInt[i]) + "\t" + std::to_string(counterOffsetExt[i]));
+              }
+              nResetOffsets++;
+            }
             log_message(DEBUG_DEBUG, "EventAligner", "Skipped event " + std::to_string(trigger[0]) + " already build " );
             continue;
           }
@@ -571,8 +581,22 @@ bool event_aligner::align_v013( std::list<kcu_event*> **single_kcu_events,  // l
               iters[i]++;
           }
           log_message(DEBUG_INFO, "EventAligner", time_stamps);
+          
+
           // push to stack
           complete->push_back(ae);
+
+          // check whether the next triggers are off, reset otherwise
+          if (next_offSets.size() > 0){
+            for (uint32_t i = 0; i < num_fpga; i++) {
+              counterOffset[i]    = next_offSets[i];
+              counterOffsetInt[i] = next_offSets_Int[i];
+              counterOffsetExt[i] = next_offSets_Ext[i];
+              log_message(DEBUG_INFO, "EventAligner", "\t FPGA: " + std::to_string(i) + "\t counterOffsets reset to " + std::to_string(counterOffset[i]) + "\t" + std::to_string(counterOffsetInt[i]) + "\t" + std::to_string(counterOffsetExt[i]));
+            }
+            nResetOffsets++;
+          }
+              
       }
       // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
       // allow for one time fixing of trigger offset using time alignment at beginning of run through
