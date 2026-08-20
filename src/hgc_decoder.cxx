@@ -316,56 +316,120 @@ bool hgc_decoder::process_v013_packet() {
             num_fullcWbs[i]= 1;
             continue;
           }
+
+
           //-------------------------------------------------------------------------------------
           // flag which events have been skipped or aligned during last alignment attempt
           //-------------------------------------------------------------------------------------
           log_message(DEBUG_DEBUG, "Analyzing return events from FPGA: " + std::to_string(i));
+
           std::list<kcu_event*>::iterator current_it = single_kcu_events[i]->begin();
           int nAligned = 0;
-          while(current_it != single_kcu_events[i]->end()){
-            // check is an aligned event has been set & remove from completed list
-            if((*current_it)->get_aligned()){
-              nAligned++;
-              log_message(DEBUG_DEBUG, "Found aligned event " + std::to_string((*current_it)->get_trigger_counter_Int() ) +"\t" 
-                                                            + std::to_string((*current_it)->get_trigger_counter_Ext()));
-              wbs[i]->set_aligned_for_event((*current_it)->get_trigger_counter_Int(), (*current_it)->get_trigger_counter_Ext());
-            }
-            
-            if((*current_it)->get_skipped() > 0){
-              log_message(DEBUG_DEBUG, "Found skipped event skipped "+ std::to_string((*current_it)->get_skipped()) +"\t times ----> \t event nr." 
-                                                            + std::to_string((*current_it)->get_trigger_counter_Int() ) +"\t" 
-                                                            + std::to_string((*current_it)->get_trigger_counter_Ext()));
-              wbs[i]->set_skipped_for_event((*current_it)->get_trigger_counter_Int(), (*current_it)->get_trigger_counter_Ext());
-              
-              // clean single waveform if we are continuously failing to align
-              int allowed_alignment_failures = 10;    // these are tuned to work for 2 FPGAs (might need retuning if more FPGAs are used)
-              if ((*current_it)->get_skipped() > allowed_alignment_failures && !(*current_it)->get_aligned()) { 
-                log_message(DEBUG_DEBUG, "\t\t\t\t=======> cleaning event ");
-                wbs[i]->drop_exact((*current_it)->get_trigger_counter_Int(), (*current_it)->get_trigger_counter_Ext());
-                num_fullcWbs[i]--;
-              }
-            }
 
-            // iterate through array
-            ++current_it;
+          while (current_it != single_kcu_events[i]->end()) {
+
+              // Save everything we need from the current event BEFORE it can be erased
+              kcu_event* event = *current_it;
+
+              bool aligned = event->get_aligned();
+              int skipped  = event->get_skipped();
+              int trigInt  = event->get_trigger_counter_Int();
+              int trigExt  = event->get_trigger_counter_Ext();
+
+              // Check whether this event has been aligned
+              if (aligned) {
+                  nAligned++;
+
+                  log_message(
+                      DEBUG_DEBUG,
+                      "Found aligned event "
+                      + std::to_string(trigInt) + "\t"
+                      + std::to_string(trigExt)
+                  );
+
+                  wbs[i]->set_aligned_for_event(trigInt, trigExt);
+              }
+
+              // Check whether this event has been skipped
+              if (skipped > 0) {
+
+                  log_message(
+                      DEBUG_DEBUG,
+                      "Found skipped event skipped "
+                      + std::to_string(skipped)
+                      + "\t times ----> \t event nr."
+                      + std::to_string(trigInt) + "\t"
+                      + std::to_string(trigExt)
+                  );
+
+                  wbs[i]->set_skipped_for_event(trigInt, trigExt);
+              }
+
+              // clean single waveform if we are continuously failing to align
+              int allowed_alignment_failures = 10;
+
+              bool remove_event =
+                  (skipped > allowed_alignment_failures && !aligned);
+
+              // IMPORTANT:
+              // Move the iterator BEFORE drop_exact().
+              // drop_exact() erases the current std::list node.
+              ++current_it;
+
+              if (remove_event) {
+
+                  log_message(
+                      DEBUG_DEBUG,
+                      "\t\t\t\t=======> cleaning event "
+                  );
+
+                  wbs[i]->drop_exact(trigInt, trigExt);
+                  num_fullcWbs[i]--;
+              }
           }
+
+
           //-------------------------------------------------------------------------------------
           // Remove already aligned events from lists
           //-------------------------------------------------------------------------------------
-          int eventsToBeRemoved = 2;              // these are tuned to work for 2 FPGAs (might need retuning if more FPGAs are used)
-          if (nAligned > eventsToBeRemoved*2){
-            std::list<kcu_event*>::iterator current_it2 = single_kcu_events[i]->begin();
-            int evtRm = 0;
-            log_message(DEBUG_DEBUG, "\t\t\t\t=======> removing first " + std::to_string(eventsToBeRemoved) + " aligned events ");
-            while(current_it2 != single_kcu_events[i]->end() && evtRm < eventsToBeRemoved){
-              if((*current_it2)->get_aligned()){
-                wbs[i]->drop_exact((*current_it2)->get_trigger_counter_Int(), (*current_it2)->get_trigger_counter_Ext());
-                num_fullcWbs[i]--;
-                evtRm++;
+          int eventsToBeRemoved = 2;
+
+          if (nAligned > eventsToBeRemoved * 2) {
+
+              std::list<kcu_event*>::iterator current_it2 =
+                  single_kcu_events[i]->begin();
+
+              int evtRm = 0;
+
+              log_message(
+                  DEBUG_DEBUG,
+                  "\t\t\t\t=======> removing first "
+                  + std::to_string(eventsToBeRemoved)
+                  + " aligned events "
+              );
+
+              while (current_it2 != single_kcu_events[i]->end() &&
+                    evtRm < eventsToBeRemoved) {
+
+                  // Save current event information before drop_exact()
+                  kcu_event* event = *current_it2;
+
+                  bool aligned = event->get_aligned();
+                  int trigInt  = event->get_trigger_counter_Int();
+                  int trigExt  = event->get_trigger_counter_Ext();
+
+                  // IMPORTANT:
+                  // Advance first because drop_exact() erases the current list node.
+                  ++current_it2;
+
+                  if (aligned) {
+
+                      wbs[i]->drop_exact(trigInt, trigExt);
+
+                      num_fullcWbs[i]--;
+                      evtRm++;
+                  }
               }
-              // iterate through array
-              ++current_it2;
-            }
           }
         }
         set_n_reset_offsets(aligner->GetNResetOffsets());
