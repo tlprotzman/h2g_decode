@@ -117,6 +117,60 @@ function ChangeNumberOfAsics()
 
 }
 
+
+function ChangeNumberOfFPGA()
+{
+
+  #fixed version change
+  vOrg="# File Version: 0.13"
+  vMod="# File Version: 0.14"
+
+  fileNameBase=$1
+  nLineRM=$2
+  
+  echo $fileNameBase
+  echo $nLineRM
+  rm $fileNameBase\_mod.h2g
+  
+  cp $fileNameBase.h2g $fileNameBase\_test.h2g 
+
+  # echo "first $nLineRM line unmod file"
+  # cat $fileNameBase\_test.h2g | head -n $nLineRM
+
+  numL=`wc -l $fileNameBase\_test.h2g | cut -d " " -f 1`
+  echo "file has $numL lines"
+  
+  cat $fileNameBase\_test.h2g | tail -n $(($numL +1 - $nLineRM)) > $fileNameBase\_headerRM.h2g 
+  cat $fileNameBase\_test.h2g | head -n $nLineRM > $fileNameBase\_header.h2g 
+
+  echo "header file" 
+  cat $fileNameBase\_header.h2g
+  echo "first 1 line mod file"
+  cat $fileNameBase\_headerRM.h2g | head -n 1
+
+  export DATA="# Number of KCUs: $4"
+  ToReplace="# Number of KCUs: $3"
+
+  echo "\n\n\n"
+  echo $ToReplace
+  echo ${DATA}
+  
+  echo "\n\n\n"
+  sed "s/$ToReplace/${DATA}/g" $fileNameBase\_header.h2g > $fileNameBase\_headerMod.h2g
+  # echo "header file modified" 
+  cat $fileNameBase\_headerMod.h2g
+
+  echo "\n\n\n"
+  cat $fileNameBase\_headerMod.h2g $fileNameBase\_headerRM.h2g > $fileNameBase\_mod.h2g
+  numN=`wc -l $fileNameBase\_mod.h2g | cut -d " " -f 1`
+  echo "new file has $numL lines"
+  echo "first $(($nLineRM)) line mod file"
+  cat $fileNameBase\_mod.h2g | head -n $(($nLineRM+1))
+
+  rm $fileNameBase\_headerMod.h2g $fileNameBase\_headerRM.h2g $fileNameBase\_header.h2g $fileNameBase\_test.h2g 
+
+}
+
 # base=/media/fbock/LFHCal2/202511_PST09/raw/TBMain2025/Run
 
 # KCUs=2
@@ -207,16 +261,28 @@ function ChangeNumberOfAsics()
 #   fi
 # done
 
-base1=/media/fbock/ALICE2-4TB/202607_FoCalTB/rawTesting/Run
-base2=/media/fbock/ALICE2-4TB/202607_FoCalTB/rawTesting/fixed/Run
-for i in $(seq -f "%03g" 205 222)
+# base1=/media/fbock/ALICE2-4TB/202607_FoCalTB/rawTesting/Run
+# base2=/media/fbock/ALICE2-4TB/202607_FoCalTB/rawTesting/fixed/Run
+# for i in $(seq -f "%03g" 205 222)
 # for i in $(seq -f "%03g" 230 230)
+# do
+#   echo $i
+#   ChangeNumberOfAsics $base1$i 25 2 3 255 5
+#   if [ -f $base1$i\_mod.h2g ]; then
+#     echo moving $i
+#     mv $base1$i\_mod.h2g $base2$i.h2g
+#   fi
+# done
+
+
+base1=/media/fbock/LFHCal2/202511_PST09/raw/TBMain2025/Run
+base2=/media/fbock/LFHCal2/202511_PST09/raw/TBMain2025/fixed/Run
+for i in $(seq -f "%03g" 54 54)
 do
   echo $i
-  ChangeNumberOfAsics $base1$i 25 2 3 255 5
+  ChangeNumberOfFPGA $base1$i 25 2 1 
   if [ -f $base1$i\_mod.h2g ]; then
     echo moving $i
     mv $base1$i\_mod.h2g $base2$i.h2g
   fi
 done
-
