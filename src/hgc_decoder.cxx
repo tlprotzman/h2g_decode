@@ -512,7 +512,11 @@ hgc_decoder::iterator hgc_decoder::iterator::operator++() {
       return *this;
     }
     log_message(DEBUG_DEBUG, "HGCDecoder", "Getting new events");
+
+    for (auto *event : *decoder->aligned_buffer)
+      delete event;
     decoder->aligned_buffer->clear();
+    
     while (decoder->aligned_buffer->size() == 0) {
       if (!decoder->get_next_events()) {
         return decoder->end();
