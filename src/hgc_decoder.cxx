@@ -128,8 +128,6 @@ hgc_decoder::hgc_decoder( const char *file_name,
                           bool adc_truncation)
     : NUM_KCU(num_kcu), NUM_ASIC(num_asic), DETECTOR_ID(detector_id), debug_level(debug_level) {
 
-    // Set up debug logging
-    logger = new stat_logger(NUM_KCU);
     #ifdef __APPLE__
     signpost_logger       = os_log_create("com.tristan.app", "run_decoder");
     signpost_id           = os_signpost_id_generate(signpost_logger);
@@ -147,7 +145,7 @@ hgc_decoder::hgc_decoder( const char *file_name,
     // initialize machine gun number (samples/trigger to make complete event)
     NUM_SAMPLES   = fs->get_number_samples();
     // Initialize line builder for all KCUs
-    lb            = new line_builder(NUM_KCU, adc_truncation);
+    lb            = new line_builder(NUM_KCU, adc_truncation, NUM_ASIC);
  
     // running counter to keep track of events per KCU in different states
     num_fullcWbs  = new long[NUM_KCU];  // current event completed counter
@@ -168,8 +166,8 @@ hgc_decoder::hgc_decoder( const char *file_name,
     // Initialize event aligner
     aligner           = new event_aligner(NUM_KCU);
     heartbeat_counter = 0;
-    // Aligned event buffer list
-    aligned_buffer    = new std::list<aligned_event*>();
+    // The event aligner owns the aligned event buffer.
+    aligned_buffer    = aligner->get_complete();
     
     num_proc_events   = 0;      // counter for fully build events
     last_trig         = -1;     // last internal trigger counter for aligned event
@@ -191,6 +189,12 @@ hgc_decoder::~hgc_decoder() {
     if (aligner) {
       delete aligner;
     }
+    delete[] buffer;
+    delete[] num_fullcWbs;
+    delete[] num_fullWbs;
+    delete[] num_attWbs;
+    delete[] num_disWbs;
+    delete[] num_progWbs;
     delete logger;
 }
 
@@ -222,6 +226,7 @@ bool hgc_decoder::process_v012_packet() {
     }
     if (heartbeat_counter > 100000) {
       log_message(DEBUG_WARNING, "No events found for 100000 packets, giving up");
+      delete[] single_kcu_events;
       return false;
     }
     delete[] single_kcu_events;

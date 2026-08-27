@@ -267,6 +267,10 @@ bool event_aligner::align_v013( std::list<kcu_event*> **single_kcu_events,  // l
         }
       }
     } // end basics checks & logging
+
+    if (done) {
+      return false;
+    }
     
     //============================================================================
     // Check whether previously aligned event is found in lists
@@ -309,16 +313,19 @@ bool event_aligner::align_v013( std::list<kcu_event*> **single_kcu_events,  // l
         foundPrevValidEvt = false;
       }
       
-      // Set the alignment iterator (iters) to the first valid event found
-      PrintBasicEventInfo(current_it, i, 3);
+      // Set the alignment iterator (iters) to the first valid event found.
       iters.push_back(current_it);
-      
-      // check whether this was the last event of the array (need at least one additional one for matching)
-      if (iters.back() == single_kcu_events[i]->end()) {
-          done = true;
+      if (current_it == single_kcu_events[i]->end()) {
+        done = true;
+        continue;
       }
-      log_message(DEBUG_TRACE, "EventAligner", "\t FPGA - last time stamp: " + std::to_string((*iters.back())->get_timestamp()));
+      PrintBasicEventInfo(current_it, i, 3);
+      log_message(DEBUG_TRACE, "EventAligner", "\t FPGA - last time stamp: " + std::to_string((*current_it)->get_timestamp()));
     } // end checking whether previous valid event is contained in lists
+
+    if (done) {
+      return false;
+    }
   
     //============================================================================
     // Main alignment routine starts here
@@ -358,6 +365,10 @@ bool event_aligner::align_v013( std::list<kcu_event*> **single_kcu_events,  // l
         if (foundPrevValidEvt){
           int status = 0;
           prev = MoveForwardToLastBuildEvent ( status, single_kcu_events[i], i, last_trig_Int, last_trig_Ext);
+        }
+        if (prev == single_kcu_events[i]->end()) {
+          done = true;
+          break;
         }
         PrintBasicEventInfo(prev, i, 1);
         next++;
@@ -518,6 +529,14 @@ bool event_aligner::align_v013( std::list<kcu_event*> **single_kcu_events,  // l
           }
           // skip to ahead to next event if already build, restart of while loop
           if (alreadyAligned){
+            for (uint32_t i = 0; i < num_fpga; i++) {
+              if (iters[i] == single_kcu_events[i]->end()) {
+                done = true;
+              }
+            }
+            if (done) {
+              break;
+            }
             // check whether the next triggers are off, reset otherwise
             if (next_offSets.size() > 0){
               for (uint32_t i = 0; i < num_fpga; i++) {
@@ -543,6 +562,10 @@ bool event_aligner::align_v013( std::list<kcu_event*> **single_kcu_events,  // l
             int status = 0;
             for (uint32_t i = 0; i < num_fpga; i++) {
               auto iter = MoveForwardToLastBuildEvent ( status, single_kcu_events[i], i, last_trig_Int, last_trig_Ext);
+              if (iter == single_kcu_events[i]->end()) {
+                done = true;
+                break;
+              }
               alignedIters.push_back(iter);
             }
           // use current position of iters if previous event wasn't found in list  
@@ -550,6 +573,9 @@ bool event_aligner::align_v013( std::list<kcu_event*> **single_kcu_events,  // l
             for (uint32_t i = 0; i < num_fpga; i++) {
               alignedIters.push_back(iters[i]);
             }
+          }
+          if (done) {
+            break;
           }
           
           //----------------------------------------------------------------------------------------------------------------
@@ -746,6 +772,9 @@ std::list<kcu_event*>::iterator event_aligner::MoveForwardToLastBuildEvent (  in
     (*currFPGAEv)->is_skipped();
     currFPGAEv++; // Move to the next event
     skipped++;
+    if (currFPGAEv == fpgaList->end()) {
+      break;
+    }
     corrCountInt = (*currFPGAEv)->get_trigger_counter_Int()-counterOffsetInt[fpgaID];
     corrCountExt = (*currFPGAEv)->get_trigger_counter_Ext()-counterOffsetExt[fpgaID];
   } 

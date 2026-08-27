@@ -62,6 +62,8 @@ class line_builder {
 private:
     // number of FPGAs (KCUs)
     uint32_t num_fpga;
+    // number of HGCROCs per FPGA
+    uint32_t num_asics;
     // lists for building full samples
     std::list<line_stream*>           *in_progress;   // only needed for < v0.13
     std::list<line_stream*>           *complete;      // only needed for < v0.13
@@ -80,8 +82,8 @@ private:
     
     // functions for < v0.13 decoding
     uint8_t decode_fpga(uint8_t fpga_id);
-    uint8_t decode_asic(uint8_t asic_id);
-    uint8_t decode_half(uint8_t half_id);
+    int decode_asic(uint8_t asic_id);
+    int decode_half(uint8_t half_id);
     void decode_line(uint8_t *buffer, line *l);
     bool is_complete(line_stream *ls);
 
@@ -91,7 +93,7 @@ private:
 
 public:
     // constructor & destructor
-    line_builder(uint32_t num_fpga, bool truncate_adc=false);
+    line_builder(uint32_t num_fpga, bool truncate_adc=false, uint32_t num_asics=8);
     ~line_builder();
 
     // processing functions for output with < v0.13
