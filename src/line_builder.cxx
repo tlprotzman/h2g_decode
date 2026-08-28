@@ -12,10 +12,12 @@
 // 
 //**************************************************************************
 line_builder::line_builder( uint32_t num_fpga, 
-                            bool truncate_adc
+                            bool truncate_adc,
+                            uint32_t num_asics
                            ) {
     //set up line builder with external settings
     this->num_fpga      = num_fpga;
+    this->num_asics     = num_asics;
     this->truncate_adc  = truncate_adc;
     in_progress         = new std::list<line_stream*>();
     complete            = new std::list<line_stream*>();
@@ -131,7 +133,7 @@ uint8_t line_builder::decode_fpga(uint8_t fpga_id) {
 // why does this only do 0 or 1??? 
 // shouldn't we be able to have up to 4 here?
 //**************************************************************************
-uint8_t line_builder::decode_asic(uint8_t asic_id) {
+int line_builder::decode_asic(uint8_t asic_id) {
     if (asic_id == 160) {
       return 0;
     } else if (asic_id ==161) {
@@ -143,7 +145,7 @@ uint8_t line_builder::decode_asic(uint8_t asic_id) {
 //**************************************************************************
 // decode ASIC half 
 //**************************************************************************
-uint8_t line_builder::decode_half(uint8_t half_id) {
+int line_builder::decode_half(uint8_t half_id) {
     if (half_id == 36) {
       return 0;
     } else if (half_id == 37) {
@@ -325,16 +327,23 @@ bool line_builder::process_packet_v013(uint8_t *packet, int packet_size) {
           packets_corrupted++;
           continue;
         }
-        if (fpga_id < 0 || fpga_id > num_fpga) {
+        if (fpga_id < 0 || static_cast<uint32_t>(fpga_id) >= num_fpga) {
           log_message(DEBUG_ERROR, "LineBuilder", "Invalid FPGA ID: " + std::to_string(fpga_id));
           std::cerr << "Invalid half fpga ID! " << std::hex<< int((packet[decode_ptr + 2]>> 4)) << std::endl;
-          for (int i = 0; i < 224/8; i++){
+          for (int i = 0; i < sizeDP/8; i++){
             for (int j = 0; j < 8; j++){
               std::cerr << std::hex <<int(packet[decode_ptr_c + i*8+j]) << "\t" ;
             }
             std::cerr << std::endl;  
           }
           std::cerr << std::dec << std::endl;  
+          decode_ptr = decode_ptr+sizeDP;
+          packets_successive_broken++;
+          packets_corrupted++;
+          continue;
+        }
+        if (asic_id < 0 || static_cast<uint32_t>(asic_id) >= num_asics) {
+          log_message(DEBUG_ERROR, "LineBuilder", "Invalid ASIC ID: " + std::to_string(asic_id));
           decode_ptr = decode_ptr+sizeDP;
           packets_successive_broken++;
           packets_corrupted++;

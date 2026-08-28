@@ -50,6 +50,7 @@ kcu_event::~kcu_event() {
     delete[] event_counter;
     delete[] orbit_counter;
     delete[] timestamp;
+    delete[] samples_counter;
     delete[] fill_counter;
     for (int i = 0; i < num_asics * 72; i++) {
       delete[] adc[i];
@@ -57,6 +58,10 @@ kcu_event::~kcu_event() {
       delete[] tot[i];
       delete[] hamming[i];
     }
+    delete[] adc;
+    delete[] toa;
+    delete[] tot;
+    delete[] hamming;
 }
 
 //*********************************************************************************
@@ -144,7 +149,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
         delete s;
         samples->pop_front();
     }
-    for (auto sample_itr = samples->begin(); sample_itr != samples->end(); sample_itr++) {
+    for (auto sample_itr = samples->begin(); sample_itr != samples->end(); ) {
         auto s = *sample_itr;
         // Check if we have a kcu_event for this sample
         bool found = false;
@@ -176,6 +181,7 @@ bool waveform_builder::build(std::list<sample*> *samples) {
                             completed++;
                         } else {
                             aborted++;
+                            delete *event;
                         }
                         in_progress->erase(std::next(event).base());
                     }
@@ -319,7 +325,7 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
     // =====================================================================
     // Main loop for waveform building
     // =====================================================================
-    for (auto sample_itr = samples->begin(); sample_itr != samples->end(); sample_itr++) {
+    for (auto sample_itr = samples->begin(); sample_itr != samples->end(); ) {
       
       // get next sample from stack 
       auto sample = *sample_itr;
@@ -336,7 +342,6 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
           auto event      = *in_progress->begin();
           auto event_itr  = in_progress->begin();
           aborted++;
-          delcount++;
           log_message(DEBUG_TRACE, "WaveformBuilder", "FPGA :" + std::to_string(event->fpga) + " Event " + std::to_string(event->trigger_counter_Int) + " " + std::to_string(event->trigger_counter_Ext) + "couldn't be completed");
           delete event;
           in_progress->erase(event_itr);
@@ -379,7 +384,9 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
           //____________________________________________________________________
           // We didn't find the sample, add a new one 
           //____________________________________________________________________
-          if (!found_sample) {
+          if (!found_sample && event->found >= num_samples) {
+            log_message(DEBUG_ERROR, "WaveformBuilder", "FPGA :" + std::to_string(event->fpga) + " Event " + std::to_string(event->trigger_counter_Int) + " " + std::to_string(event->trigger_counter_Ext) + " has more than " + std::to_string(num_samples) + " distinct samples; discarding the extra sample");
+          } else if (!found_sample) {
             // Figure out where it should go
             int insert_location = 0;
 
@@ -452,10 +459,12 @@ bool waveform_builder::build_v013(std::list<sample*> *samples) {
             } else if (!correctTiming){
               aborted++;
               log_message(DEBUG_ERROR, "WaveformBuilder", "FPGA :" + std::to_string(event->fpga) + " Event " + std::to_string(event->trigger_counter_Int) + " " + std::to_string(event->trigger_counter_Ext) + "was not stored as the sample time differnence was incorrect");
+              delete event;
               in_progress->erase(event_itr);
             } else if (!correctNSamples){
               aborted++;
               log_message(DEBUG_ERROR, "WaveformBuilder", "FPGA :" + std::to_string(event->fpga) + " Event " + std::to_string(event->trigger_counter_Int) + " " + std::to_string(event->trigger_counter_Ext) + "didn't have the correct number of samples: " + std::to_string(event->found) + " instead of " + std::to_string(num_samples));
+              delete event;
               in_progress->erase(event_itr);
             }
           }
