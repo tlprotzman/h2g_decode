@@ -19,9 +19,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 message(STATUS "Using C++ standard: ${CMAKE_CXX_STANDARD}")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -fPIC")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g")
-
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -fPIC")
+# set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g -fPIC") # slow running, easier debugging
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O3 -fPIC") # faster running
 
 option(USE_ROOT "Enable TTree writer" ON)
 if (USE_ROOT)
@@ -31,7 +31,7 @@ endif()
 
 if(ROOT_FOUND)
     # Compiler flags
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -Werror -fPIC")
+    # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -Werror -fPIC")
     execute_process(COMMAND root-config --cflags OUTPUT_VARIABLE ROOT_CFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
     execute_process(COMMAND root-config --ldflags OUTPUT_VARIABLE ROOT_LDFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
     execute_process(COMMAND root-config --glibs OUTPUT_VARIABLE ROOT_GLIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
